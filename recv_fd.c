@@ -3,7 +3,7 @@
 
 int recv_fd(int socket)
  {
-  int sent_fd, available_ancillary_element_buffer_space;
+  int sent_fd;
   struct msghdr socket_message;
   struct iovec io_vector[1];
   struct cmsghdr *control_message = NULL;
