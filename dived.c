@@ -13,6 +13,7 @@
 #include <sys/ioctl.h>
 #include "recv_fd.h"
 #include "safer.h"
+#include <sys/wait.h>
 
 
 int main(int argc, char* argv[]) {
@@ -209,10 +210,19 @@ int main(int argc, char* argv[]) {
             }
             envp[numargs]=NULL;
 
-            
+            int pid2 = fork();
 
-            execvpe(argv[0], argv, envp);
-            write(fd, "!", 1); /* Signal failure */
+            if (!pid2) {
+                execvpe(argv[0], argv, envp);
+                exit(127);
+            }
+
+            int status;
+            waitpid(pid2, &status, 0);
+
+            snprintf(buf, 256, "%d\n", WEXITSTATUS(status));
+            safer_write(fd, buf, 256);
+            
             exit(1);
         } else {
             close(fd);

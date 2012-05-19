@@ -144,13 +144,17 @@ int main(int argc, char* argv[], char* envp[]) {
      *
      * We will get EOF here when all processes started there exit
      */
-    ret = safer_read(fd, buf, 1);
-
-    if(ret!=0) {
-        fprintf(stderr, "dive: Something failed\n");
+    ret = safer_read(fd, buf, 256);
+    if (ret!=256) {
+        fprintf(stderr, "dive: Something failed with the server\n");
         return 127;
     }
-
+    int exitcode;
+    sscanf(buf, "%d", &exitcode);
     
-    return 0;
+    if (exitcode==127) {
+        fprintf(stderr, "dive: Probably can't execute command\n");
+    }
+
+    return exitcode;
 }
