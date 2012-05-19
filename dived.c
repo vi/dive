@@ -33,13 +33,14 @@ int main(int argc, char* argv[]) {
     int ret;
 
     if(argc<2) {
-        printf("Usage: dived socket_path [-d] [-D] [-F] [-P] [-S]\n");
+        printf("Usage: dived socket_path [-d] [-D] [-F] [-P] [-S] [-p pidfile]\n");
         printf("Listen UNIX socket and start programs, redirecting fds.\n");
         printf("          -d   detach\n");
         printf("          -D   call daemon(0,0) in children\n");
         printf("          -F   no fork, serve once (debugging)\n");
         printf("          -P   no setuid/setgid/etc\n");
         printf("          -S   no sedsid/ioctl TIOCSCTTY\n");
+        printf("          -p   save PID to this file\n");
         return 4;
     }
 
@@ -55,6 +56,7 @@ int main(int argc, char* argv[]) {
     int nofork=0;
     int noprivs=0;
     int nosetsid=0;
+    char* pidfile=NULL;
 
     {
         int i;
@@ -73,6 +75,10 @@ int main(int argc, char* argv[]) {
             }else
             if(!strcmp(argv[i], "-S")) {
                 nosetsid=1;
+            }else
+            if(!strcmp(argv[i], "-p")) {
+                pidfile=argv[i+1];
+                ++i;
             }else
             {
                 fprintf(stderr, "Unknown argument %s\n", argv[i]);
@@ -106,6 +112,15 @@ int main(int argc, char* argv[]) {
 
 
     if(!nodaemon) daemon(0, 0);
+
+    /* Save pidfile */
+    if (pidfile){
+        FILE* f = fopen(pidfile, "w");
+        fprintf(f, "%d\n", getpid());
+        fclose(f);
+    }
+
+
     for(;;) {
         struct sockaddr_un addr2;
         socklen_t addrlen = sizeof(addr2);
