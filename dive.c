@@ -30,6 +30,7 @@ int main(int argc, char* argv[], char* envp[]) {
 
     if(argc<3) {
         printf("Usage: dive socket_path program [arguments]\n");
+        printf("Start program in remote 'dived' redirecting fds from here\n");
         printf("       If you want normal \"bash\", use sommand line like that:\n");
         printf("       dive /path/to/socket socat -,raw,echo=0 exec:bash,pty,setsid,stderr\n");
         return 4;

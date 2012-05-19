@@ -18,6 +18,7 @@ int main(int argc, char* argv[]) {
 
     if(argc<2) {
         printf("Usage: dived socket_path [-d] [-D] [-F] [-P] [-S]\n");
+        printf("Listen UNIX socket and start programs, redirecting fds.\n");
         printf("          -d   detach\n");
         printf("          -D   call daemon(0,0) in children\n");
         printf("          -F   no fork, serve once (debugging)\n");
