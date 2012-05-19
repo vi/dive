@@ -212,6 +212,7 @@ int main(int argc, char* argv[]) {
             
 
             execvpe(argv[0], argv, envp);
+            write(fd, "!", 1); /* Signal failure */
             exit(1);
         } else {
             close(fd);

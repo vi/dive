@@ -90,7 +90,9 @@ int main(int argc, char* argv[], char* envp[]) {
             snprintf(buf, 16, "%d\n", i);            
             safer_write(fd, buf, 16);
             send_fd(fd, i);
-            close(i);
+            if (i!=2) {
+                close(i);
+            }
         }
     }
     snprintf(buf, 16, "-1\n");            
@@ -138,14 +140,17 @@ int main(int argc, char* argv[], char* envp[]) {
     free(buf2);
 
 
-    
-rerecv:
-    ret = recv(fd, buf, 1, 0);
-    if(ret==-1){
-        if (errno==EINTR || errno==EAGAIN) {
-            goto rerecv;
-        }
+    /* Server is leaving our client socket as "marker" 
+     *
+     * We will get EOF here when all processes started there exit
+     */
+    ret = safer_read(fd, buf, 1);
+
+    if(ret!=0) {
+        fprintf(stderr, "dive: Something failed\n");
+        return 127;
     }
+
     
     return 0;
 }
