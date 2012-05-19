@@ -68,9 +68,7 @@ int main(int argc, char* argv[], char* envp[]) {
     }
     
     /* Receive PID */
-    char buf[256];
-    safer_read(fd, buf, 256);
-    sscanf(buf, "%d", &theirpid);
+    safer_read(fd, (char*)&theirpid, sizeof(theirpid));
 
     //ptrace(PTRACE_ATTACH, theirpid, 0, 0);
     //ptrace(PTRACE_CONT, theirpid, 0, 0);
@@ -87,16 +85,15 @@ int main(int argc, char* argv[], char* envp[]) {
         struct stat st;
         ret = fstat(i, &st);
         if(ret!=-1 && i!=fd) {
-            snprintf(buf, 16, "%d\n", i);            
-            safer_write(fd, buf, 16);
+            safer_write(fd, (char*)&i, sizeof(i));
             send_fd(fd, i);
             if (i!=2) {
                 close(i);
             }
         }
     }
-    snprintf(buf, 16, "-1\n");            
-    safer_write(fd, buf, 16);
+    i=-1;
+    safer_write(fd, (char*)&i, sizeof(i));
 
     /* Send argv */
     int totallen=0;
@@ -112,9 +109,8 @@ int main(int argc, char* argv[], char* envp[]) {
         u+=l+1;
     }
 
-    memset(buf, 0, 256);
-    snprintf(buf, 256, "%d %d", argc, totallen);
-    safer_write(fd, buf, 256);
+    safer_write(fd, (char*)&argc, sizeof(argc));
+    safer_write(fd, (char*)&totallen, sizeof(totallen));
     safer_write(fd, buf2, totallen);
     free(buf2);
 
@@ -133,9 +129,8 @@ int main(int argc, char* argv[], char* envp[]) {
         memcpy(buf2+u, envp[i], l+1);
         u+=l+1;
     }
-    memset(buf, 0, 256);
-    snprintf(buf, 256, "%d %d", envc, totallen);
-    safer_write(fd, buf, 256);
+    safer_write(fd, (char*)&envc, sizeof(envc));
+    safer_write(fd, (char*)&totallen, sizeof(totallen));
     safer_write(fd, buf2, totallen);
     free(buf2);
 
@@ -144,13 +139,12 @@ int main(int argc, char* argv[], char* envp[]) {
      *
      * We will get EOF here when all processes started there exit
      */
-    ret = safer_read(fd, buf, 256);
-    if (ret!=256) {
+    int exitcode;
+    ret = safer_read(fd, (char*)&exitcode, sizeof(exitcode));
+    if (ret!=sizeof(exitcode)) {
         fprintf(stderr, "dive: Something failed with the server\n");
         return 127;
     }
-    int exitcode;
-    sscanf(buf, "%d", &exitcode);
     
     if (exitcode==127) {
         fprintf(stderr, "dive: Probably can't execute command\n");

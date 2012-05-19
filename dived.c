@@ -137,10 +137,8 @@ retry_accept:
             if(!nochilddaemon) daemon(0,0);
             
             /* Send pid */
-            char buf[256];
-            memset(buf, 0, 256);
-            snprintf(buf, 256, "%d", getpid());
-            safer_write(fd, buf, 256);
+            pid_t mypid = getpid();
+            safer_write(fd, (char*)&mypid, sizeof(mypid));
 
             /* Receive and apply current directory */
             int curdir = recv_fd(fd);
@@ -152,10 +150,13 @@ retry_accept:
             memset(saved_fdnums, 0, sizeof saved_fdnums);
             for(;;) {
                 int i;
-                safer_read(fd, buf, 16);
-                sscanf(buf, "%d", &i);
+                safer_read(fd, (char*)&i, sizeof(i));
                 if(i==-1) {
                     break;
+                }
+                if(i<-1 || i>=MAXFD) {
+                    fprintf(stderr, "dived: Wrong file descriptor number %d\n", i);
+                    return 7;
                 }
                 int f = recv_fd(fd);
                 if(i==fd) {
@@ -198,15 +199,17 @@ retry_accept:
                 setuid(cred.uid);
             }
 
+            /* Not caring much about security since that point */
+
 
             int pid2 = fork();
 
             if (!pid2) {
 
                 /* Receive argv */
-                safer_read(fd, buf, 256);
                 int numargs, totallen;
-                sscanf(buf, "%d%d", &numargs, &totallen);
+                safer_read(fd, (char*)&numargs, sizeof(numargs));
+                safer_read(fd, (char*)&totallen, sizeof(totallen));
 
                 char* args=(char*)malloc(totallen);
                 safer_read(fd, args, totallen);
@@ -224,8 +227,8 @@ retry_accept:
 
                 
                 /* Receive environment */
-                safer_read(fd, buf, 256);
-                sscanf(buf, "%d%d", &numargs, &totallen);
+                safer_read(fd, (char*)&numargs, sizeof(numargs));
+                safer_read(fd, (char*)&totallen, sizeof(totallen));
                 char* env=(char*)malloc(totallen);
                 safer_read(fd, env, totallen);
                 char** envp=malloc((numargs+1)*sizeof(char*));
@@ -253,8 +256,8 @@ retry_accept:
             int status;
             waitpid(pid2, &status, 0);
 
-            snprintf(buf, 256, "%d\n", WEXITSTATUS(status));
-            safer_write(fd, buf, 256);
+            int exitcode = WEXITSTATUS(status);
+            safer_write(fd, (char*)&exitcode, sizeof(exitcode));
             
             exit(1);
         } else {
