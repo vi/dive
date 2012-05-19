@@ -11,10 +11,21 @@
 #include <grp.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <sys/wait.h>
+#include <signal.h>
+#include <errno.h>
+
 #include "recv_fd.h"
 #include "safer.h"
-#include <sys/wait.h>
 
+#define MAXFD 1024
+
+int saved_fdnums[MAXFD];
+
+void sigchild(int arg) {
+    int status;
+    wait(&status);
+}
 
 int main(int argc, char* argv[]) {
     int sock;
@@ -30,6 +41,11 @@ int main(int argc, char* argv[]) {
         printf("          -P   no setuid/setgid/etc\n");
         printf("          -S   no sedsid/ioctl TIOCSCTTY\n");
         return 4;
+    }
+
+    {
+        struct sigaction sa = {{sigchild}};
+        sigaction(SIGCHLD, &sa, NULL);
     }
 
     unlink(argv[1]);
@@ -93,9 +109,13 @@ int main(int argc, char* argv[]) {
     for(;;) {
         struct sockaddr_un addr2;
         socklen_t addrlen = sizeof(addr2);
-        int fd = accept(sock, (struct sockaddr*)&addr2, &addrlen);
+        int fd;
+
+retry_accept:
+        fd = accept(sock, (struct sockaddr*)&addr2, &addrlen);
 
         if(fd == -1) {
+            if(errno == EINTR || errno == EAGAIN) goto retry_accept;
             perror("accept");
             return 5;
         }
@@ -129,6 +149,7 @@ int main(int argc, char* argv[]) {
 
 
             /* Receive and apply file descriptors */
+            memset(saved_fdnums, 0, sizeof saved_fdnums);
             for(;;) {
                 int i;
                 safer_read(fd, buf, 16);
@@ -138,13 +159,18 @@ int main(int argc, char* argv[]) {
                 }
                 int f = recv_fd(fd);
                 if(i==fd) {
+                    /* Move away our socket desciptor */
                     int tmp = dup(fd);
                     close(fd);
                     dup2(f, i);
                     fd = tmp;
                 } else {
-                    dup2(f, i);
+                    if(f!=i) {
+                        dup2(f, i);
+                        close(f);
+                    }
                 }
+                if(i<MAXFD) saved_fdnums[i]=1;
             }
 
             if (!nosetsid) {
@@ -158,7 +184,7 @@ int main(int argc, char* argv[]) {
 
 
 
-            /* Change into user */
+            /* Change into the user which is calling us */
             if(!noprivs) {
                 char *username = "";
 
@@ -173,48 +199,55 @@ int main(int argc, char* argv[]) {
             }
 
 
-
-            /* Receive argv */
-            safer_read(fd, buf, 256);
-            int numargs, totallen;
-            sscanf(buf, "%d%d", &numargs, &totallen);
-
-            char* args=(char*)malloc(totallen);
-            safer_read(fd, args, totallen);
-            char** argv=malloc((numargs+1)*sizeof(char*));
-            int i, u;
-            argv[0]=args;
-            u=0;
-            for(i=0; i<totallen; ++i) {
-                if (!args[i]) {
-                    ++u;
-                    argv[u]=args+i+1;
-                }
-            }
-            argv[numargs]=NULL;
-
-            
-            /* Receive environment */
-            safer_read(fd, buf, 256);
-            sscanf(buf, "%d%d", &numargs, &totallen);
-            char* env=(char*)malloc(totallen);
-            safer_read(fd, env, totallen);
-            char** envp=malloc((numargs+1)*sizeof(char*));
-            envp[0]=env;
-            u=0;
-            for(i=0; i<totallen; ++i) {
-                if (!env[i]) {
-                    ++u;
-                    envp[u]=env+i+1;
-                }
-            }
-            envp[numargs]=NULL;
-
             int pid2 = fork();
 
             if (!pid2) {
+
+                /* Receive argv */
+                safer_read(fd, buf, 256);
+                int numargs, totallen;
+                sscanf(buf, "%d%d", &numargs, &totallen);
+
+                char* args=(char*)malloc(totallen);
+                safer_read(fd, args, totallen);
+                char** argv=malloc((numargs+1)*sizeof(char*));
+                int i, u;
+                argv[0]=args;
+                u=0;
+                for(i=0; i<totallen; ++i) {
+                    if (!args[i]) {
+                        ++u;
+                        argv[u]=args+i+1;
+                    }
+                }
+                argv[numargs]=NULL;
+
+                
+                /* Receive environment */
+                safer_read(fd, buf, 256);
+                sscanf(buf, "%d%d", &numargs, &totallen);
+                char* env=(char*)malloc(totallen);
+                safer_read(fd, env, totallen);
+                char** envp=malloc((numargs+1)*sizeof(char*));
+                envp[0]=env;
+                u=0;
+                for(i=0; i<totallen; ++i) {
+                    if (!env[i]) {
+                        ++u;
+                        envp[u]=env+i+1;
+                    }
+                }
+                envp[numargs]=NULL;
+
+                close(fd);
                 execvpe(argv[0], argv, envp);
                 exit(127);
+            }
+
+            /* Release client's fds */
+            int i;
+            for(i=0; i<MAXFD; ++i) {
+                if(saved_fdnums[i]) close(i);
             }
 
             int status;
