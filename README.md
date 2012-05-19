@@ -22,6 +22,16 @@ Exampe:
         inet 127.0.0.1/8 scope host lo
     # # our network configuration persisted
 
+Multi-user example:
+
+    # umask 0000
+    # unshare -n -- dived /var/run/qqq2.socket -d
+    
+    $ dive /var/run/qqq2.socket bash
+    $ ping 127.0.0.1
+    connect: Network is unreachable
+    $ id
+    $ uid=1000(vi) gid=1000(vi) groups=1000(vi),20(dialout),21(fax),...
 
 Features:
     
@@ -35,7 +45,7 @@ Features:
 Notes:
 
 * For clean interactive shell access dived need to be started as root (for setsid/TIOCSCTTY)
-* * Without TIOCSCTTY, use `socat -,raw,echo=0 exec:bash,pty,setsid,stderr` (there's hind in `dive`'s usage message) as the program to start to have nicer bash
+    * Without TIOCSCTTY, use `socat -,raw,echo=0 exec:bash,pty,setsid,stderr` (there's hind in `dive`'s usage message) as the program to start to have nicer bash
 * Current directory can be "smuggled" into unshare where that part of filesystem is not mounted
  
 
