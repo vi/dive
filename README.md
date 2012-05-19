@@ -41,6 +41,7 @@ Features:
 * Preserving of all file descriptors (not only stdin/stdout/stderr)
 * Setting session ID and controlling terminal, for clean bash without "no job control" (requires root access)
 * Preserving of environment variables
+* Preserving of exit code
 
 Notes:
 
