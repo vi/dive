@@ -1,3 +1,6 @@
+// dived -- Server for seamless program starter inside unshared namespaces
+// License=MIT ; Created by Vitaly "_Vi" Shukela in 2012
+
 #define _GNU_SOURCE
 
 #include <stdlib.h>
@@ -10,6 +13,7 @@
 #include <sys/ioctl.h>
 #include "recv_fd.h"
 #include "safer.h"
+
 
 int main(int argc, char* argv[]) {
     int sock;

@@ -1,3 +1,6 @@
+// dived -- Client for seamless program starter inside unshared namespaces
+// License=MIT ; Created by Vitaly "_Vi" Shukela in 2012
+
 #define _GNU_SOURCE
 
 #include <stdio.h>
