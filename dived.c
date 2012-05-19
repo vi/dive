@@ -32,7 +32,7 @@ int main(int argc, char* argv[]) {
     struct sockaddr_un addr;
     int ret;
 
-    if(argc<2) {
+    if(argc<2 || !strcmp(argv[1], "-?") || !strcmp(argv[1], "--help")) {
         printf("Usage: dived socket_path [-d] [-D] [-F] [-P] [-S] [-p pidfile]\n");
         printf("Listen UNIX socket and start programs, redirecting fds.\n");
         printf("          -d   detach\n");
