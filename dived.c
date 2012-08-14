@@ -5,6 +5,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/stat.h>   // for umask
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <pwd.h>
@@ -33,7 +34,7 @@ int main(int argc, char* argv[]) {
     int ret;
 
     if(argc<2 || !strcmp(argv[1], "-?") || !strcmp(argv[1], "--help")) {
-        printf("Usage: dived socket_path [-d] [-D] [-F] [-P] [-S] [-p pidfile]\n");
+        printf("Usage: dived socket_path [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-M umask]\n");
         printf("Listen UNIX socket and start programs, redirecting fds.\n");
         printf("          -d   detach\n");
         printf("          -D   call daemon(0,0) in children\n");
@@ -42,6 +43,7 @@ int main(int argc, char* argv[]) {
         printf("          -u   setuid to this user\n");
         printf("          -S   no sedsid/ioctl TIOCSCTTY\n");
         printf("          -p   save PID to this file\n");
+        printf("          -M   use this umask (like '002')\n");
         return 4;
     }
 
@@ -59,6 +61,7 @@ int main(int argc, char* argv[]) {
     int nosetsid=0;
     char* forceuser=NULL;
     char* pidfile=NULL;
+    char* umask_=NULL;
 
     {
         int i;
@@ -86,6 +89,10 @@ int main(int argc, char* argv[]) {
                 pidfile=argv[i+1];
                 ++i;
             }else
+            if(!strcmp(argv[i], "-M")) {
+                umask_=argv[i+1];
+                ++i;
+            }else
             {
                 fprintf(stderr, "Unknown argument %s\n", argv[i]);
                 return 4;
@@ -97,6 +104,10 @@ int main(int argc, char* argv[]) {
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, argv[1], sizeof(addr.sun_path) - 1);
 
+    if (umask_) {
+        long umask_decoded = strtol(umask_, NULL, 8);
+        umask(umask_decoded);
+    }
 
     sock = socket(AF_UNIX, SOCK_STREAM, 0);
     if (sock==-1) {
@@ -165,7 +176,6 @@ retry_accept:
             int curdir = recv_fd(fd);
             fchdir(curdir);
             close(curdir);
-
 
             /* Receive and apply file descriptors */
             memset(saved_fdnums, 0, sizeof saved_fdnums);
@@ -240,7 +250,6 @@ retry_accept:
             int pid2 = fork();
 
             if (!pid2) {
-
                 /* Receive argv */
                 int numargs, totallen;
                 safer_read(fd, (char*)&numargs, sizeof(numargs));
