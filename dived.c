@@ -216,13 +216,18 @@ retry_accept:
             
             if(!nochilddaemon) daemon(0,0);
             
-            long int version = 300;
+            long int version = 400;
             safer_write(fd, (char*)&version, sizeof(version));
             
             /* Send pid */
             pid_t mypid = getpid();
             safer_write(fd, (char*)&mypid, sizeof(mypid));
 
+            /* Receive and apply umask */
+            mode_t umask_;
+            safer_read(fd, (char*)&umask_, sizeof(umask_));
+            umask(umask_);
+            
             /* Receive and apply current directory */
             int curdir = recv_fd(fd);
             fchdir(curdir);

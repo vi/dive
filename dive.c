@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <sys/socket.h>
+#include <sys/stat.h>   // for umask
 #include <sys/un.h>
 #include <errno.h>
 #include <sys/ptrace.h>
@@ -71,7 +72,7 @@ int main(int argc, char* argv[], char* envp[]) {
     
     /* Receive version */
     safer_read(fd, (char*)&version, sizeof(version));
-    if (version != 300) {
+    if (version != 400) {
         fprintf(stderr, "Incompatible versions of dive and dived\n");
         return 3;
     }
@@ -82,6 +83,13 @@ int main(int argc, char* argv[], char* envp[]) {
     //ptrace(PTRACE_ATTACH, theirpid, 0, 0);
     //ptrace(PTRACE_CONT, theirpid, 0, 0);
 
+    /* Send umask */
+    mode_t umask_ = umask(0);
+    umask(umask_);
+    safer_write(fd, (char*)&umask_, sizeof(umask_));
+    
+    
+    
     /* Send current directory */
     DIR *curdir = opendir(".");
     int curdir_fd = dirfd(curdir);
