@@ -21,6 +21,9 @@
 
 #define MAXFD 1024
 
+#define VERSION 400
+#define VERSION2 "v0.4"
+
 int saved_fdnums[MAXFD];
 
 void sigchild(int arg) {
@@ -33,14 +36,15 @@ int main(int argc, char* argv[]) {
     struct sockaddr_un addr;
     int ret;
 
-    if(argc<2 || !strcmp(argv[1], "-?") || !strcmp(argv[1], "--help")) {
+    if(argc<2 || !strcmp(argv[1], "-?") || !strcmp(argv[1], "--help") || !strcmp(argv[1], "--version")) {
+        printf("Dive server %s (proto %d) https://github.com/vi/dive/\n", VERSION2, VERSION);
+        printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");
         printf("Usage: dived socket_path [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-C mode] [-U user:group]\n");
-        printf("Listen UNIX socket and start programs, redirecting fds.\n");
         printf("          -d   detach\n");
         printf("          -D   call daemon(0,0) in children\n");
         printf("          -F   no fork, serve once (debugging)\n");
         printf("          -P   no setuid/setgid/etc\n");
-        printf("          -u   setuid to this user\n");
+        printf("          -u   setuid to this user instead of the client\n");
         printf("          -S   no sedsid/ioctl TIOCSCTTY\n");
         printf("          -p   save PID to this file\n");
         printf("          -C   chmod the socket to this mode (like '0777')\n");
@@ -216,7 +220,7 @@ retry_accept:
             
             if(!nochilddaemon) daemon(0,0);
             
-            long int version = 400;
+            long int version = VERSION;
             safer_write(fd, (char*)&version, sizeof(version));
             
             /* Send pid */

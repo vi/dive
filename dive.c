@@ -27,6 +27,9 @@ void sigint(int arg) {
 
 #define MAXFD 1024
 
+#define VERSION 400
+#define VERSION2 "v0.4"
+
 int main(int argc, char* argv[], char* envp[]) {
     int fd;
     struct sockaddr_un addr;
@@ -34,9 +37,10 @@ int main(int argc, char* argv[], char* envp[]) {
     long int version;
 
     if(argc<3) {
+        printf("Dive client %s (proto %d) https://github.com/vi/dive/\n", VERSION2, VERSION);
         printf("Usage: dive socket_path program [arguments]\n");
         printf("Start program in remote 'dived' and 'invite' it here by redirecting fds\n");
-        printf("       If don't have normal \"bash\" by default, use sommand line like that:\n");
+        printf("       If don't have normal \"bash\" behaviour by default, there's workaround command like that:\n");
         printf("       dive /path/to/socket socat -,raw,echo=0 exec:bash,pty,setsid,stderr\n");
         return 4;
     }
@@ -72,7 +76,7 @@ int main(int argc, char* argv[], char* envp[]) {
     
     /* Receive version */
     safer_read(fd, (char*)&version, sizeof(version));
-    if (version != 400) {
+    if (version != VERSION) {
         fprintf(stderr, "Incompatible versions of dive and dived\n");
         return 3;
     }
