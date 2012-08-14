@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
     int ret;
 
     if(argc<2 || !strcmp(argv[1], "-?") || !strcmp(argv[1], "--help")) {
-        printf("Usage: dived socket_path [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-M umask]\n");
+        printf("Usage: dived socket_path [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-M umask] [-U user:group]\n");
         printf("Listen UNIX socket and start programs, redirecting fds.\n");
         printf("          -d   detach\n");
         printf("          -D   call daemon(0,0) in children\n");
@@ -43,7 +43,8 @@ int main(int argc, char* argv[]) {
         printf("          -u   setuid to this user\n");
         printf("          -S   no sedsid/ioctl TIOCSCTTY\n");
         printf("          -p   save PID to this file\n");
-        printf("          -M   use this umask (like '002')\n");
+        printf("          -M   use this umask (like '002') to create the socket\n");
+        printf("          -U   chown the socket to this user:group\n");
         return 4;
     }
 
@@ -54,6 +55,7 @@ int main(int argc, char* argv[]) {
 
     unlink(argv[1]);
 
+    char* socket_path = argv[1];
     int nochilddaemon=1;
     int nodaemon=1;
     int nofork=0;
@@ -62,6 +64,7 @@ int main(int argc, char* argv[]) {
     char* forceuser=NULL;
     char* pidfile=NULL;
     char* umask_=NULL;
+    char* chown_=NULL;
 
     {
         int i;
@@ -93,6 +96,10 @@ int main(int argc, char* argv[]) {
                 umask_=argv[i+1];
                 ++i;
             }else
+            if(!strcmp(argv[i], "-U")) {
+                chown_=argv[i+1];
+                ++i;
+            }else
             {
                 fprintf(stderr, "Unknown argument %s\n", argv[i]);
                 return 4;
@@ -102,7 +109,7 @@ int main(int argc, char* argv[]) {
 
     memset(&addr, 0, sizeof(struct sockaddr_un));
     addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, argv[1], sizeof(addr.sun_path) - 1);
+    strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path) - 1);
 
     if (umask_) {
         long umask_decoded = strtol(umask_, NULL, 8);
@@ -125,6 +132,44 @@ int main(int argc, char* argv[]) {
     if (ret == -1) {
         perror("listen");
         return 3;
+    }
+    
+    if (chown_) {
+        char *usern = strtok(chown_, ":");
+        char *groupn = strtok(NULL, ":");
+        if (!groupn) {
+            fprintf(stderr, "chown parameter should be in format \"user:group\"\n");
+            return 12;
+        }
+        uid_t targetuid;
+        gid_t targetgid;
+        
+        char* endnum;
+        targetuid = strtol(usern, &endnum, 10);
+        if (errno || endnum == usern || *endnum) {
+            /* not a number */
+            struct passwd *userp = getpwnam(usern);
+            if (!userp) {
+                fprintf(stderr, "User %s not found (and not a number)\n", usern);
+                return 12;
+            }
+            targetuid = userp->pw_uid;
+        }
+        
+        targetgid = strtol(groupn, &endnum, 10);
+        if (errno || endnum == groupn || *endnum) {
+            struct group *groupp = getgrnam(groupn);
+            if (!groupp) {
+                fprintf(stderr, "Group %s not found (and not a number)\n", groupn);
+                return 13;
+            }
+            targetgid = groupp->gr_gid;
+        }
+        
+        if (chown(socket_path, targetuid, targetgid) == -1) {
+            perror("chown");
+            return 14;
+        }
     }
 
 
