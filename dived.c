@@ -39,6 +39,7 @@ int main(int argc, char* argv[]) {
         printf("          -D   call daemon(0,0) in children\n");
         printf("          -F   no fork, serve once (debugging)\n");
         printf("          -P   no setuid/setgid/etc\n");
+        printf("          -u   setuid to this user\n");
         printf("          -S   no sedsid/ioctl TIOCSCTTY\n");
         printf("          -p   save PID to this file\n");
         return 4;
@@ -56,6 +57,7 @@ int main(int argc, char* argv[]) {
     int nofork=0;
     int noprivs=0;
     int nosetsid=0;
+    char* forceuser=NULL;
     char* pidfile=NULL;
 
     {
@@ -75,6 +77,10 @@ int main(int argc, char* argv[]) {
             }else
             if(!strcmp(argv[i], "-S")) {
                 nosetsid=1;
+            }else
+            if(!strcmp(argv[i], "-u")) {
+                forceuser=argv[i+1];
+                ++i;
             }else
             if(!strcmp(argv[i], "-p")) {
                 pidfile=argv[i+1];
@@ -200,18 +206,32 @@ retry_accept:
 
 
 
-            /* Change into the user which is calling us */
+            /* Change into the appropriate user*/
             if(!noprivs) {
+                struct passwd *pw;                
+                uid_t targetuid = cred.uid;
+                gid_t targetgid = cred.gid;
+                
+                if (forceuser) {
+                    pw = getpwnam(forceuser);
+                    if (pw) {
+                        targetuid = pw->pw_uid;
+                        targetgid = pw->pw_gid;
+                    }
+                } else {
+                    /* By default it is user at the other end of the connection */
+                    pw = getpwuid(cred.uid);
+                }
+                
                 char *username = "";
 
-                struct passwd *pw = getpwuid(cred.uid);
                 if(pw) {
                     username = pw->pw_name;
                 }
 
-                initgroups(username, cred.gid);
-                setgid(cred.gid);
-                setuid(cred.uid);
+                initgroups(username, targetgid);
+                setgid(targetgid);
+                setuid(targetuid);
             }
 
             /* Not caring much about security since that point */
