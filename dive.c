@@ -30,6 +30,7 @@ int main(int argc, char* argv[], char* envp[]) {
     int fd;
     struct sockaddr_un addr;
     int ret;
+    long int version;
 
     if(argc<3) {
         printf("Usage: dive socket_path program [arguments]\n");
@@ -65,6 +66,14 @@ int main(int argc, char* argv[], char* envp[]) {
     if(ret==-1) {
         perror("connect");
         return 2;
+    }
+    
+    
+    /* Receive version */
+    safer_read(fd, (char*)&version, sizeof(version));
+    if (version != 300) {
+        fprintf(stderr, "Incompatible versions of dive and dived\n");
+        return 3;
     }
     
     /* Receive PID */

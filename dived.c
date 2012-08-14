@@ -216,6 +216,9 @@ retry_accept:
             
             if(!nochilddaemon) daemon(0,0);
             
+            long int version = 300;
+            safer_write(fd, (char*)&version, sizeof(version));
+            
             /* Send pid */
             pid_t mypid = getpid();
             safer_write(fd, (char*)&mypid, sizeof(mypid));
