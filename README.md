@@ -2,7 +2,7 @@ Start processes in other network/mount/whatever namespace, as created by `unshar
 
 Works by sending file descriptors over UNIX socket. 
 
-** Exampe **
+**Exampe**
 
     # # Start dived in unshared network namespace
     # unshare -n  -- dived /var/run/qqq.socket -d
@@ -22,7 +22,7 @@ Works by sending file descriptors over UNIX socket.
         inet 127.0.0.1/8 scope host lo
     # # our network configuration persisted
 
-** Multi-user example **
+**Multi-user example**
 
 Let users start programs networkless.
 
@@ -35,7 +35,7 @@ Let users start programs networkless.
     $ id
     $ uid=1000(vi) gid=1000(vi) groups=1000(vi),20(dialout),21(fax),...
 
-** "Poor man's sudo" example **
+**"Poor man's sudo" example**
 
 Grant Alice access to Bob.
 
@@ -49,7 +49,7 @@ Grant Alice access to Bob.
     connect: Permission denied
     
     
-** Usage **
+**Usage**
 
     Usage: dived socket_path [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-C mode] [-U user:group]
               -d   detach
@@ -64,9 +64,9 @@ Grant Alice access to Bob.
               
     Usage: dive socket_path program [arguments]
     
-** Features **
+**Features**
     
-* Absence of any filesystem permission tricks (chmod +s)
+* Absence of any filesystem permission tricks (no "chmod +s" required)
 * Secure preserving of user id and groups (requires root access)
 * Preserving of current directory
 * Preserving of all file descriptors (not only stdin/stdout/stderr)
@@ -74,7 +74,7 @@ Grant Alice access to Bob.
 * Preserving of environment variables
 * Preserving of exit code
 
-** Notes **
+**Notes**
 
 * For clean interactive shell access dived need to be started as root (for setsid/TIOCSCTTY)
     * Without TIOCSCTTY, use `socat -,raw,echo=0 exec:bash,pty,setsid,stderr` (there's hind in `dive`'s usage message) as the program to start to have nicer bash
