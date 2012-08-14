@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
     int ret;
 
     if(argc<2 || !strcmp(argv[1], "-?") || !strcmp(argv[1], "--help")) {
-        printf("Usage: dived socket_path [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-M umask] [-U user:group]\n");
+        printf("Usage: dived socket_path [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-C mode] [-U user:group]\n");
         printf("Listen UNIX socket and start programs, redirecting fds.\n");
         printf("          -d   detach\n");
         printf("          -D   call daemon(0,0) in children\n");
@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
         printf("          -u   setuid to this user\n");
         printf("          -S   no sedsid/ioctl TIOCSCTTY\n");
         printf("          -p   save PID to this file\n");
-        printf("          -M   use this umask (like '002') to create the socket\n");
+        printf("          -C   chmod the socket to this mode (like '0777')\n");
         printf("          -U   chown the socket to this user:group\n");
         return 4;
     }
@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
     int nosetsid=0;
     char* forceuser=NULL;
     char* pidfile=NULL;
-    char* umask_=NULL;
+    char* chmod_=NULL;
     char* chown_=NULL;
 
     {
@@ -92,8 +92,8 @@ int main(int argc, char* argv[]) {
                 pidfile=argv[i+1];
                 ++i;
             }else
-            if(!strcmp(argv[i], "-M")) {
-                umask_=argv[i+1];
+            if(!strcmp(argv[i], "-C")) {
+                chmod_=argv[i+1];
                 ++i;
             }else
             if(!strcmp(argv[i], "-U")) {
@@ -110,11 +110,6 @@ int main(int argc, char* argv[]) {
     memset(&addr, 0, sizeof(struct sockaddr_un));
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path) - 1);
-
-    if (umask_) {
-        long umask_decoded = strtol(umask_, NULL, 8);
-        umask(umask_decoded);
-    }
 
     sock = socket(AF_UNIX, SOCK_STREAM, 0);
     if (sock==-1) {
@@ -169,6 +164,14 @@ int main(int argc, char* argv[]) {
         if (chown(socket_path, targetuid, targetgid) == -1) {
             perror("chown");
             return 14;
+        }
+    }
+    
+    if (chmod_) {
+        long mask_decoded = strtol(chmod_, NULL, 8);
+        if (chmod(socket_path, mask_decoded) == -1) {
+            perror("chmod");
+            return 15;
         }
     }
 
