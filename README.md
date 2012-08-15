@@ -24,7 +24,7 @@ Works by sending file descriptors over UNIX socket.
 
 **Multi-user example**
 
-Let users start programs networkless.
+Let users start programs with network access disabled.
 
     # umask 0000
     # unshare -n -- dived /var/run/qqq2.socket -d
@@ -40,6 +40,7 @@ Let users start programs networkless.
 Grant Alice access to Bob.
 
     root# dived /var/run/alice2bob -d -C 700 -U alice:alice -u bob
+    
     alice$ HOME=/home/bob USER=bob dive /var/run/alice2bob bash
     bob$ id
     uid=1037(bob) gid=1045(bob) groups=1045(bob),1033(ololo)
