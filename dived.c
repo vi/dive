@@ -3,6 +3,7 @@
 
 #define _GNU_SOURCE
 
+#include <sched.h> // clone
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/stat.h>   // for umask
@@ -51,6 +52,7 @@ struct dived_options {
     int client_argv;
     char* chroot_;
     char** envp;
+    char* unshare_;
 } options;
 
 int serve(struct dived_options* opts) {
@@ -341,7 +343,8 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("Dive server %s (proto %d) https://github.com/vi/dive/\n", VERSION2, VERSION);
         printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");
         printf("Usage: dived socket_path [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] "
-               "[-C mode] [-U user:group] [-R directory] [-- prepended commandline parts]\n");
+               "[-C mode] [-U user:group] [-R directory] [-s smth1,smth2,...] "
+               "[-- prepended commandline parts]\n");
         printf("          -d --detach           detach\n");
         printf("          -D --children-daemon  call daemon(0,0) in children\n");
         printf("          -F --no-fork          no fork, serve once (debugging)\n");
@@ -350,6 +353,8 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -S --no-setsid        no sedsid/ioctl TIOCSCTTY\n");
         printf("          -R --chroot           chroot to this directory \n");
         printf("              Note that current directory stays on unchrooted filesystem \n");
+        printf("          -s --unshare          Unshare this (comma-separated list); also detaches\n");
+        printf("                                ipc,net,fs,pid,uts\n");
         printf("          -p --pidfile          save PID to this file\n");
         printf("          -C --chmod            chmod the socket to this mode (like '0777')\n");
         printf("          -U --chown            chown the socket to this user:group\n");
@@ -391,6 +396,7 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->client_environment = 1;
     opts->chroot_ = NULL;
     opts->envp = envp;
+    opts->unshare_ = NULL;
 
     {
         int i;
@@ -430,6 +436,10 @@ int main(int argc, char* argv[], char* envp[]) {
                 opts->chroot_=argv[i+1];
                 ++i;
             }else
+            if(!strcmp(argv[i], "-s") || !strcmp(argv[i], "--unshare")) {
+                opts->unshare_=argv[i+1];
+                ++i;
+            }else
             if(!strcmp(argv[i], "-E") || !strcmp(argv[i], "--no-environment")) {
                 opts->client_environment = 0;
             }else
@@ -456,6 +466,30 @@ int main(int argc, char* argv[], char* envp[]) {
             }
         }
     }
-
-    return serve(opts);
+    
+    if (!opts->unshare_) {
+        return serve(opts);
+    } else {
+        int flags=0;
+        char* q = strtok(opts->unshare_, ",");
+        for(; q; q=strtok(NULL, ",")) {
+            if      (!strcmp(q,"ipc")) flags|=CLONE_NEWIPC;
+            else if (!strcmp(q,"net")) flags|=CLONE_NEWNET;
+            else if (!strcmp(q,"fs" )) flags|=CLONE_NEWNS;
+            else if (!strcmp(q,"pid")) flags|=CLONE_NEWPID;
+            else if (!strcmp(q,"uts")) flags|=CLONE_NEWUTS;
+            else {
+                fprintf(stderr, "Unknown unshare flag '%s'\n", q);
+                return 21;
+            }
+        }
+        
+        char* stack = malloc(1024*16);
+        int cpid = clone( (int(*)(void*)) serve, stack, CLONE_VM|flags, opts);
+        if (cpid == -1) {
+            perror("clone");
+            return 19;
+        }
+        return 0; 
+    }
 }
