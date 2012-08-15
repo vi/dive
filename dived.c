@@ -27,6 +27,8 @@
 
 int saved_fdnums[MAXFD];
 
+extern char **environ;
+
 void sigchild(int arg) {
     int status;
     wait(&status);
@@ -168,8 +170,15 @@ retry_accept:
             close(sock);
             struct ucred cred;
             socklen_t len = sizeof(struct ucred);
-            getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &cred, &len);
+            struct passwd *client_cred;
+            if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) == -1) {
+                perror("getsockopt SOL_SOCKET SO_PEERCRED");
+                return 23;
+            } else {
+                client_cred = getpwuid(cred.uid);
+            }
 
+            
 
             //printf("pid=%ld, euid=%ld, egid=%ld\n", (long) cred.pid, (long) cred.uid, (long) cred.gid);
             
@@ -246,7 +255,7 @@ retry_accept:
                     }
                 } else {
                     /* By default it is user at the other end of the connection */
-                    pw = getpwuid(cred.uid);
+                    pw = client_cred;
                 }
                 
                 char *username = "";
@@ -298,18 +307,50 @@ retry_accept:
                 safer_read(fd, env, totallen);
                 char** envp_;
                 if (opts->client_environment) {
-                    envp_=malloc((numargs+1)*sizeof(char*));
-                    envp_[0]=env;
+                    envp_=malloc((numargs+4+1)*sizeof(char*));
+                    int was_zero = 1;
                     u=0;
                     for(i=0; i<totallen; ++i) {
-                        if (!env[i]) {
+                        if (was_zero) {
+                            was_zero = 0;
+                            if(!strncmp(env+i, "DIVE_", 5)) continue;
+                            envp_[u]=env+i;
                             ++u;
-                            envp_[u]=env+i+1;
+                            if(u>=numargs) break;
+                        } 
+                        if (!env[i]) {
+                            was_zero = 1;
                         }
                     }
-                    envp_[numargs]=NULL;
+                    char *buffer_uid = (char*)malloc(64);
+                    char *buffer_gid = (char*)malloc(64);
+                    char *buffer_pid = (char*)malloc(64);
+                    char *buffer_user = (char*)malloc(1024);
+                    snprintf(buffer_uid, 64, "DIVE_UID=%d", cred.uid);
+                    snprintf(buffer_gid, 64, "DIVE_GID=%d", cred.gid);
+                    snprintf(buffer_pid, 64, "DIVE_PID=%d", cred.pid);
+                    if (client_cred) {
+                        snprintf(buffer_user, 1024, "DIVE_USER=%s", client_cred->pw_name);
+                    } else {
+                        snprintf(buffer_user, 1024, "DIVE_USER=");
+                    }
+                    
+                    envp_[u+0]=buffer_uid;
+                    envp_[u+1]=buffer_gid;
+                    envp_[u+2]=buffer_pid;
+                    envp_[u+3]=buffer_user;
+                    envp_[u+4]=NULL;
                 } else {
-                    envp_ = opts->envp;
+                    char buffer[64];
+                    sprintf(buffer, "%d", cred.uid); setenv("DIVE_UID", buffer, 1);
+                    sprintf(buffer, "%d", cred.gid); setenv("DIVE_GID", buffer, 1);
+                    sprintf(buffer, "%d", cred.pid); setenv("DIVE_PID", buffer, 1);
+                    if (client_cred) {
+                        setenv("DIVE_USER", client_cred->pw_name, 1);
+                    } else {
+                        setenv("DIVE_USER", "", 1);
+                    }
+                    envp_ = environ;
                 }
 
                 close(fd);
