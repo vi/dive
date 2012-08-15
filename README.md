@@ -97,6 +97,7 @@ Grant Alice access to Bob.
 
 * For clean interactive shell access dived need to be started as root (for setsid/TIOCSCTTY)
     * Without TIOCSCTTY, use `socat -,raw,echo=0 exec:bash,pty,setsid,stderr` (there's hind in `dive`'s usage message) as the program to start to have nicer bash
+    * With TIOCSCTTY it steams controlling terminal from the previous process (leaving it "homeless"), so "exec dive socket bash" is preferred.
 * Current directory can be "smuggled" into unshare where that part of filesystem is not mounted
  
 
