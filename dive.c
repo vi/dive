@@ -27,7 +27,7 @@ void sigint(int arg) {
 
 #define MAXFD 1024
 
-#define VERSION 400
+#define VERSION 500
 #define VERSION2 "v0.5"
 
 int main(int argc, char* argv[], char* envp[]) {
@@ -100,6 +100,9 @@ int main(int argc, char* argv[], char* envp[]) {
     send_fd(fd, curdir_fd);
     closedir(curdir);
 
+    /* Send stdin to make it controlling terminal there */
+    send_fd(fd, 0);
+    
     /* Send and close all file descriptors */
     int i, u;
     for(i=0; i<MAXFD; ++i) {

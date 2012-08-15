@@ -22,7 +22,7 @@
 
 #define MAXFD 1024
 
-#define VERSION 400
+#define VERSION 500
 #define VERSION2 "v0.5"
 
 int saved_fdnums[MAXFD];
@@ -41,6 +41,7 @@ struct dived_options {
     int nofork;
     int noprivs;
     int nosetsid;
+    int nocsctty;
     char* forceuser;
     char* pidfile;
     char* chmod_;
@@ -200,6 +201,9 @@ retry_accept:
             int curdir = recv_fd(fd);
             if (opts->client_chdir) fchdir(curdir);
             close(curdir);
+            
+            /* Receive file descriptor to be controlling terminal */
+            int terminal_fd = recv_fd(fd);
 
             /* Receive and apply file descriptors */
             memset(saved_fdnums, 0, sizeof saved_fdnums);
@@ -232,11 +236,14 @@ retry_accept:
 
             if (!opts->nosetsid) {
                 ret = setsid();
-                
-                #ifndef TIOCSCTTY
-                #define TIOCSCTTY 0x540E
-                #endif
-                ioctl (0, TIOCSCTTY, 1);
+            }
+            if (!opts->nocsctty) {
+                if (terminal_fd != -1) {
+                    #ifndef TIOCSCTTY
+                    #define TIOCSCTTY 0x540E
+                    #endif
+                    ioctl (0, TIOCSCTTY, 1);
+                }
             }
 
 
@@ -391,7 +398,8 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -F --no-fork          no fork, serve once (debugging)\n");
         printf("          -P --no-setuid        no setuid/setgid/etc\n");
         printf("          -u --user             setuid to this user instead of the client\n");
-        printf("          -S --no-setsid        no sedsid/ioctl TIOCSCTTY\n");
+        printf("          -S --no-setsid        no setsid\n");
+        printf("          -T --no-csctty        no ioctl TIOCSCTTY\n");
         printf("          -R --chroot           chroot to this directory \n");
         printf("              Note that current directory stays on unchrooted filesystem \n");
         printf("          -s --unshare          Unshare this (comma-separated list); also detaches\n");
@@ -405,7 +413,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -O --no-fds           Don't let client set file descriptors\n");
         printf("          -M --no-umask         Don't let client set umask\n");
         printf("          --                    prepend this to each command line ('--' is mandatory)\n");
-        printf("              Note that the program being strarted using \"--\" should be\n");
+        printf("              Note that the program beingnocsctty strarted using \"--\" should be\n");
         printf("              as secure as suid programs, but it doesn't know\n");
         printf("              real uid/gid.\n");
         return 4;
@@ -424,6 +432,7 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->nofork=0;
     opts->noprivs=0;
     opts->nosetsid=0;
+    opts->nocsctty=0;
     opts->forceuser=NULL;
     opts->pidfile=NULL;
     opts->chmod_=NULL;
@@ -456,6 +465,9 @@ int main(int argc, char* argv[], char* envp[]) {
             }else
             if(!strcmp(argv[i], "-S") || !strcmp(argv[i], "--no-setsid")) {
                 opts->nosetsid=1;
+            }else
+            if(!strcmp(argv[i], "-T") || !strcmp(argv[i], "--no-csctty")) {
+                opts->nocsctty=1;
             }else
             if(!strcmp(argv[i], "-u") || !strcmp(argv[i], "--user")) {
                 opts->forceuser=argv[i+1];
