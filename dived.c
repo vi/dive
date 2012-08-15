@@ -31,7 +31,7 @@ void sigchild(int arg) {
     wait(&status);
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[], char* envp[]) {
     int sock;
     struct sockaddr_un addr;
     int ret;
@@ -50,6 +50,11 @@ int main(int argc, char* argv[]) {
         printf("          -p --pidfile          save PID to this file\n");
         printf("          -C --chmod            chmod the socket to this mode (like '0777')\n");
         printf("          -U --chown            chown the socket to this user:group\n");
+        printf("          -E --no-environment   Don't let client set environment variables\n");
+        printf("          -A --no-argv          Don't let client set command line\n");
+        printf("          -H --no-chdir         Don't let client set current directory\n");
+        printf("          -O --no-fds           Don't let client set file descriptors\n");
+        printf("          -M --no-umask         Don't let client set umask\n");
         printf("          --                    prepend this to each command line ('--' is mandatory)\n");
         printf("              Note that the program being strarted using \"--\" should be\n");
         printf("              as secure as suid programs, but it doesn't know\n");
@@ -76,6 +81,11 @@ int main(int argc, char* argv[]) {
     char* chown_=NULL;
     char** forced_argv = NULL;
     int forced_argv_count = 0;
+    int client_umask = 1;
+    int client_chdir = 1;
+    int client_fds = 1;
+    int client_environment = 1;
+    int client_argv = 1;
 
     {
         int i;
@@ -110,6 +120,21 @@ int main(int argc, char* argv[]) {
             if(!strcmp(argv[i], "-U") || !strcmp(argv[i], "--chown")) {
                 chown_=argv[i+1];
                 ++i;
+            }else
+            if(!strcmp(argv[i], "-E") || !strcmp(argv[i], "--no-environment")) {
+                client_environment = 0;
+            }else
+            if(!strcmp(argv[i], "-A") || !strcmp(argv[i], "--no-argv")) {
+                client_argv = 0;
+            }else
+            if(!strcmp(argv[i], "-H") || !strcmp(argv[i], "--no-chdir")) {
+                client_chdir = 0;
+            }else
+            if(!strcmp(argv[i], "-O") || !strcmp(argv[i], "--no-fds")) {
+                client_fds = 0;
+            }else
+            if(!strcmp(argv[i], "-M") || !strcmp(argv[i], "--no-umask")) {
+                client_umask = 0;
             }else
             if(!strcmp(argv[i], "--")) {
                 forced_argv = &argv[i+1];
@@ -242,11 +267,11 @@ retry_accept:
             /* Receive and apply umask */
             mode_t umask_;
             safer_read(fd, (char*)&umask_, sizeof(umask_));
-            umask(umask_);
+            if (client_umask) umask(umask_);
             
             /* Receive and apply current directory */
             int curdir = recv_fd(fd);
-            fchdir(curdir);
+            if (client_chdir) fchdir(curdir);
             close(curdir);
 
             /* Receive and apply file descriptors */
@@ -256,12 +281,13 @@ retry_accept:
                 safer_read(fd, (char*)&i, sizeof(i));
                 if(i==-1) {
                     break;
-                }
+                }                    
                 if(i<-1 || i>=MAXFD) {
                     fprintf(stderr, "dived: Wrong file descriptor number %d\n", i);
                     return 7;
                 }
-                int f = recv_fd(fd);
+                int f = recv_fd(fd);                
+                if(!client_fds)continue;
                 if(i==fd) {
                     /* Move away our socket desciptor */
                     int tmp = dup(fd);
@@ -329,6 +355,7 @@ retry_accept:
 
                 char* args=(char*)malloc(totallen);
                 safer_read(fd, args, totallen);
+                if(!client_argv) { numargs=0; totallen=0; }
                 char** argv=malloc((numargs+forced_argv_count+1)*sizeof(char*));
                 int i, u;
                 for(u=0; u<forced_argv_count; ++u) {
@@ -350,19 +377,24 @@ retry_accept:
                 safer_read(fd, (char*)&totallen, sizeof(totallen));
                 char* env=(char*)malloc(totallen);
                 safer_read(fd, env, totallen);
-                char** envp=malloc((numargs+1)*sizeof(char*));
-                envp[0]=env;
-                u=0;
-                for(i=0; i<totallen; ++i) {
-                    if (!env[i]) {
-                        ++u;
-                        envp[u]=env+i+1;
+                char** envp_;
+                if (client_environment) {
+                    envp_=malloc((numargs+1)*sizeof(char*));
+                    envp_[0]=env;
+                    u=0;
+                    for(i=0; i<totallen; ++i) {
+                        if (!env[i]) {
+                            ++u;
+                            envp_[u]=env+i+1;
+                        }
                     }
+                    envp_[numargs]=NULL;
+                } else {
+                    envp_ = envp;
                 }
-                envp[numargs]=NULL;
 
                 close(fd);
-                execvpe(argv[0], argv, envp);
+                execvpe(argv[0], argv, envp_);
                 exit(127);
             }
 
