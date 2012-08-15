@@ -40,13 +40,15 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("Dive server %s (proto %d) https://github.com/vi/dive/\n", VERSION2, VERSION);
         printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");
         printf("Usage: dived socket_path [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] "
-               "[-C mode] [-U user:group] [-- prepended commandline parts]\n");
+               "[-C mode] [-U user:group] [-R directory] [-- prepended commandline parts]\n");
         printf("          -d --detach           detach\n");
         printf("          -D --children-daemon  call daemon(0,0) in children\n");
         printf("          -F --no-fork          no fork, serve once (debugging)\n");
         printf("          -P --no-setuid        no setuid/setgid/etc\n");
         printf("          -u --user             setuid to this user instead of the client\n");
         printf("          -S --no-setsid        no sedsid/ioctl TIOCSCTTY\n");
+        printf("          -R --chroot           chroot to this directory \n");
+        printf("              Note that current directory stays on unchrooted filesystem \n");
         printf("          -p --pidfile          save PID to this file\n");
         printf("          -C --chmod            chmod the socket to this mode (like '0777')\n");
         printf("          -U --chown            chown the socket to this user:group\n");
@@ -86,6 +88,7 @@ int main(int argc, char* argv[], char* envp[]) {
     int client_fds = 1;
     int client_environment = 1;
     int client_argv = 1;
+    char* chroot_ = NULL;
 
     {
         int i;
@@ -119,6 +122,10 @@ int main(int argc, char* argv[], char* envp[]) {
             }else
             if(!strcmp(argv[i], "-U") || !strcmp(argv[i], "--chown")) {
                 chown_=argv[i+1];
+                ++i;
+            }else
+            if(!strcmp(argv[i], "-R") || !strcmp(argv[i], "--chroot")) {
+                chroot_=argv[i+1];
                 ++i;
             }else
             if(!strcmp(argv[i], "-E") || !strcmp(argv[i], "--no-environment")) {
@@ -218,6 +225,10 @@ int main(int argc, char* argv[], char* envp[]) {
 
 
     if(!nodaemon) daemon(1, 0);
+        
+    if (chroot_) {
+        chroot(chroot_);
+    }
 
     /* Save pidfile */
     if (pidfile){
