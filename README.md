@@ -1,4 +1,4 @@
-Start processes in other network/mount/whatever namespace, as created by `unshare` or `lxc-start`.
+Start processes in other network/mount/whatever namespace, as created by `unshare` or `lxc-start`. Also allow users execute programs in other user account or in chroot in controlled way (like sudo, but without setuid-bit in filesystem).
 
 Works by sending file descriptors over UNIX socket. 
 
@@ -35,7 +35,7 @@ Let users start programs with network access disabled.
     $ id
     $ uid=1000(vi) gid=1000(vi) groups=1000(vi),20(dialout),21(fax),...
 
-**"Poor man's sudo" example**
+**"Poor man's sudo" example 1**
 
 Grant Alice access to Bob.
 
@@ -49,6 +49,35 @@ Grant Alice access to Bob.
     malice$ dive /var/run/alice2bob bash
     connect: Permission denied
     
+    
+**Poor man's suid-bit-less sudo example 2**
+
+Allow certain users execute certain programs (script in some directory) as root. Use client's command line arguments and filehandles, but not environment variables, current directory or controlling tty.
+
+    root# dived  /var/run/suidless_sudo --detach --user root --no-csctty --chmod 777 --no-environment  --no-chdir --no-umask -- /root/scripts/suidless_sudo
+    root# cat /root/scripts/suidless_sudo
+    #!/usr/bin/perl -w
+      use strict;
+      die("No script specified") if $#ARGV == -1;
+      my $script = $ARGV[0];
+      my $user = $ENV{"DIVE_USER"};
+      die ("No user") unless $user;
+      die ("Forbidden") unless $user eq "alice";
+      die ("Bad script name $script") unless ($script =~ /^([a-zA-Z0-9_]{1,64})$/);
+      exec "/root/scripts/allowed_scripts/$1"
+    
+    alice$ dive /var/run/suidless_sudo ../../../bin/bash
+    Bad script name  at /root/scripts/suidless_sudo line 8.
+    alice$ dive /var/run/suidless_sudo reboot
+    Reboot started
+    
+    bob$ dive /var/run/suidless_sudo reboot
+    Forbidden at /root/scripts/suidless_sudo line 7.
+    bob$ DIVE_USER=alice dive /var/run/suidless_sudo reboot
+    Forbidden at /root/scripts/suidless_sudo line 7.
+    
+    
+
     
 **Usage**
 
