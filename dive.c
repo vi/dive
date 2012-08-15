@@ -28,7 +28,7 @@ void sigint(int arg) {
 #define MAXFD 1024
 
 #define VERSION 500
-#define VERSION2 "v0.5"
+#define VERSION2 "v0.6"
 
 int main(int argc, char* argv[], char* envp[]) {
     int fd;
