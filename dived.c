@@ -40,15 +40,15 @@ int main(int argc, char* argv[]) {
         printf("Dive server %s (proto %d) https://github.com/vi/dive/\n", VERSION2, VERSION);
         printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");
         printf("Usage: dived socket_path [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-C mode] [-U user:group]\n");
-        printf("          -d   detach\n");
-        printf("          -D   call daemon(0,0) in children\n");
-        printf("          -F   no fork, serve once (debugging)\n");
-        printf("          -P   no setuid/setgid/etc\n");
-        printf("          -u   setuid to this user instead of the client\n");
-        printf("          -S   no sedsid/ioctl TIOCSCTTY\n");
-        printf("          -p   save PID to this file\n");
-        printf("          -C   chmod the socket to this mode (like '0777')\n");
-        printf("          -U   chown the socket to this user:group\n");
+        printf("          -d --detach           detach\n");
+        printf("          -D --children-daemon  call daemon(0,0) in children\n");
+        printf("          -F --no-fork          no fork, serve once (debugging)\n");
+        printf("          -P --no-setuid        no setuid/setgid/etc\n");
+        printf("          -u --user             setuid to this user instead of the client\n");
+        printf("          -S --no-setsid        no sedsid/ioctl TIOCSCTTY\n");
+        printf("          -p --pidfile          save PID to this file\n");
+        printf("          -C --chmod            chmod the socket to this mode (like '0777')\n");
+        printf("          -U --chown            chown the socket to this user:group\n");
         return 4;
     }
 
@@ -73,34 +73,34 @@ int main(int argc, char* argv[]) {
     {
         int i;
         for(i=2; i<argc; ++i) {
-            if(!strcmp(argv[i], "-d")) {
+            if(!strcmp(argv[i], "-d") || !strcmp(argv[i], "--detach")) {
                 nodaemon=0;
             }else
-            if(!strcmp(argv[i], "-D")) {
+            if(!strcmp(argv[i], "-D") || !strcmp(argv[i], "--children-daemon")) {
                 nochilddaemon=0;
             }else
-            if(!strcmp(argv[i], "-F")) {
+            if(!strcmp(argv[i], "-F") || !strcmp(argv[i], "--no-fork")) {
                 nofork=1;
             }else
-            if(!strcmp(argv[i], "-P")) {
+            if(!strcmp(argv[i], "-P") || !strcmp(argv[i], "--no-setuid")) {
                 noprivs=1;
             }else
-            if(!strcmp(argv[i], "-S")) {
+            if(!strcmp(argv[i], "-S") || !strcmp(argv[i], "--no-setsid")) {
                 nosetsid=1;
             }else
-            if(!strcmp(argv[i], "-u")) {
+            if(!strcmp(argv[i], "-u") || !strcmp(argv[i], "--user")) {
                 forceuser=argv[i+1];
                 ++i;
             }else
-            if(!strcmp(argv[i], "-p")) {
+            if(!strcmp(argv[i], "-p") || !strcmp(argv[i], "--pidfile")) {
                 pidfile=argv[i+1];
                 ++i;
             }else
-            if(!strcmp(argv[i], "-C")) {
+            if(!strcmp(argv[i], "-C") || !strcmp(argv[i], "--chmod")) {
                 chmod_=argv[i+1];
                 ++i;
             }else
-            if(!strcmp(argv[i], "-U")) {
+            if(!strcmp(argv[i], "-U") || !strcmp(argv[i], "--chown")) {
                 chown_=argv[i+1];
                 ++i;
             }else
