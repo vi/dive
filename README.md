@@ -82,7 +82,7 @@ Allow certain users execute certain programs (script in some directory) as root.
 **Usage**
 
     Usage: dived {socket_path|-i} [-d] [-D] [-F] [-P] [-S] 
-    [-p pidfile] [-u user] [-C mode] [-U user:group] [-R directory] [-r]
+    [-p pidfile] [-u user] [-C mode] [-U user:group] [-R directory] [-r [-W]]
     [-s smth1,smth2,...] [-- prepended commandline parts]
               -d --detach           detach
               -i --inetd            serve once, interpred stdin as client socket
@@ -95,6 +95,8 @@ Allow certain users execute certain programs (script in some directory) as root.
               -R --chroot           chroot to this directory 
                   Note that current directory stays on unchrooted filesystem 
               -r --client-chroot    Allow arbitrary chroot from client
+              -W --root-to-current  Set server's root directory as current directory
+                                    (for using with '-r' and '-H' simultaneously)
               -s --unshare          Unshare this (comma-separated list); also detaches
                                     ipc,net,fs,pid,uts
               -p --pidfile          save PID to this file

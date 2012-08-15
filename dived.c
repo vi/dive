@@ -59,6 +59,7 @@ struct dived_options {
     char* unshare_;
     int inetd;
     int client_chroot;
+    int root_to_current;
 } options;
 
 int serve_client(int fd, struct dived_options *opts) {
@@ -97,7 +98,11 @@ int serve_client(int fd, struct dived_options *opts) {
     if (opts->client_chroot) {
         DIR* curdir;
         if (!opts->client_chdir) {
-            curdir = opendir("."); 
+            if (opts->root_to_current) {
+                curdir = opendir("/");
+            } else {
+                curdir = opendir("."); 
+            }
         }
         
         fchdir(rootdir);
@@ -424,7 +429,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("Dive server %s (proto %d) https://github.com/vi/dive/\n", VERSION2, VERSION);
         printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");
         printf("Usage: dived {socket_path|-i} [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] "
-               "[-C mode] [-U user:group] [-R directory] [-r] [-s smth1,smth2,...] "
+               "[-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] "
                "[-- prepended commandline parts]\n");
         printf("          -d --detach           detach\n");
         printf("          -i --inetd            serve once, interpred stdin as client socket\n");
@@ -437,6 +442,8 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -R --chroot           chroot to this directory \n");
         printf("              Note that current directory stays on unchrooted filesystem \n");
         printf("          -r --client-chroot    Allow arbitrary chroot from client\n");
+        printf("          -W --root-to-current  Set server's root directory as current directory\n");
+        printf("                                (for using with '-r' and '-H' simultaneously)\n");
         printf("          -s --unshare          Unshare this (comma-separated list); also detaches\n");
         printf("                                ipc,net,fs,pid,uts\n");
         printf("          -p --pidfile          save PID to this file\n");
@@ -484,6 +491,7 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->unshare_ = NULL;
     opts->inetd = 0;
     opts->client_chroot = 0;
+    opts->root_to_current = 0;
     if(!strcmp(argv[1], "-i") || !strcmp(argv[1], "--inetd")) { opts->inetd = 1; }
 
     {
@@ -551,6 +559,9 @@ int main(int argc, char* argv[], char* envp[]) {
             }else
             if(!strcmp(argv[i], "-r") || !strcmp(argv[i], "--client-chroot")) {
                 opts->client_chroot = 1;
+            }else
+            if(!strcmp(argv[i], "-W") || !strcmp(argv[i], "--root-to-current")) {
+                opts->root_to_current = 1;
             }else
             if(!strcmp(argv[i], "--")) {
                 opts->forced_argv = &argv[i+1];
