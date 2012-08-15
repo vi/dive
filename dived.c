@@ -16,13 +16,14 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <errno.h>
+#include <dirent.h>
 
 #include "recv_fd.h"
 #include "safer.h"
 
 #define MAXFD 1024
 
-#define VERSION 500
+#define VERSION 700
 #define VERSION2 "v0.6"
 
 int saved_fdnums[MAXFD];
@@ -57,6 +58,7 @@ struct dived_options {
     char** envp;
     char* unshare_;
     int inetd;
+    int client_chroot;
 } options;
 
 int serve_client(int fd, struct dived_options *opts) {
@@ -90,10 +92,29 @@ int serve_client(int fd, struct dived_options *opts) {
     safer_read(fd, (char*)&umask_, sizeof(umask_));
     if (opts->client_umask) umask(umask_);
     
+    /* Receive and apply root directory */
+    int rootdir = recv_fd(fd);
+    if (opts->client_chroot) {
+        DIR* curdir;
+        if (!opts->client_chdir) {
+            curdir = opendir("."); 
+        }
+        
+        fchdir(rootdir);
+        chroot(".");
+        close(rootdir);
+        
+        if (!opts->client_chdir) {
+            fchdir(dirfd(curdir));
+            closedir(curdir);
+        }        
+    }
+    
     /* Receive and apply current directory */
     int curdir = recv_fd(fd);
     if (opts->client_chdir) fchdir(curdir);
     close(curdir);
+    
     
     /* Receive file descriptor to be controlling terminal */
     int terminal_fd = recv_fd(fd);
@@ -403,7 +424,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("Dive server %s (proto %d) https://github.com/vi/dive/\n", VERSION2, VERSION);
         printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");
         printf("Usage: dived {socket_path|-i} [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] "
-               "[-C mode] [-U user:group] [-R directory] [-s smth1,smth2,...] "
+               "[-C mode] [-U user:group] [-R directory] [-r] [-s smth1,smth2,...] "
                "[-- prepended commandline parts]\n");
         printf("          -d --detach           detach\n");
         printf("          -i --inetd            serve once, interpred stdin as client socket\n");
@@ -415,6 +436,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -T --no-csctty        no ioctl TIOCSCTTY\n");
         printf("          -R --chroot           chroot to this directory \n");
         printf("              Note that current directory stays on unchrooted filesystem \n");
+        printf("          -r --client-chroot    Allow arbitrary chroot from client\n");
         printf("          -s --unshare          Unshare this (comma-separated list); also detaches\n");
         printf("                                ipc,net,fs,pid,uts\n");
         printf("          -p --pidfile          save PID to this file\n");
@@ -461,6 +483,7 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->envp = envp;
     opts->unshare_ = NULL;
     opts->inetd = 0;
+    opts->client_chroot = 0;
     if(!strcmp(argv[1], "-i") || !strcmp(argv[1], "--inetd")) { opts->inetd = 1; }
 
     {
@@ -525,6 +548,9 @@ int main(int argc, char* argv[], char* envp[]) {
             }else
             if(!strcmp(argv[i], "-M") || !strcmp(argv[i], "--no-umask")) {
                 opts->client_umask = 0;
+            }else
+            if(!strcmp(argv[i], "-r") || !strcmp(argv[i], "--client-chroot")) {
+                opts->client_chroot = 1;
             }else
             if(!strcmp(argv[i], "--")) {
                 opts->forced_argv = &argv[i+1];

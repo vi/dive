@@ -82,7 +82,7 @@ Allow certain users execute certain programs (script in some directory) as root.
 **Usage**
 
     Usage: dived {socket_path|-i} [-d] [-D] [-F] [-P] [-S] 
-    [-p pidfile] [-u user] [-C mode] [-U user:group] [-R directory] 
+    [-p pidfile] [-u user] [-C mode] [-U user:group] [-R directory] [-r]
     [-s smth1,smth2,...] [-- prepended commandline parts]
               -d --detach           detach
               -i --inetd            serve once, interpred stdin as client socket
@@ -94,6 +94,7 @@ Allow certain users execute certain programs (script in some directory) as root.
               -T --no-csctty        no ioctl TIOCSCTTY
               -R --chroot           chroot to this directory 
                   Note that current directory stays on unchrooted filesystem 
+              -r --client-chroot    Allow arbitrary chroot from client
               -s --unshare          Unshare this (comma-separated list); also detaches
                                     ipc,net,fs,pid,uts
               -p --pidfile          save PID to this file
@@ -124,6 +125,7 @@ Allow certain users execute certain programs (script in some directory) as root.
 * Selective disabling of "preserving" parts above (from v0.5)
 * Chroot / CLONE_NEW... / forced command line (from v0.5)
 * Setting of DIVE_USER and other variables according to client credentials
+* Allowing clients to set it's own root directory ("-r" option)
 
 **Notes**
 

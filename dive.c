@@ -27,7 +27,7 @@ void sigint(int arg) {
 
 #define MAXFD 1024
 
-#define VERSION 500
+#define VERSION 700
 #define VERSION2 "v0.6"
 
 int main(int argc, char* argv[], char* envp[]) {
@@ -92,7 +92,11 @@ int main(int argc, char* argv[], char* envp[]) {
     umask(umask_);
     safer_write(fd, (char*)&umask_, sizeof(umask_));
     
-    
+    /* Send root directory */
+    DIR* rootdir = opendir("/");
+    int rootdir_fd = dirfd(rootdir);
+    send_fd(fd, rootdir_fd);
+    closedir(rootdir);
     
     /* Send current directory */
     DIR *curdir = opendir(".");
