@@ -69,8 +69,6 @@ int main(int argc, char* argv[], char* envp[]) {
         sigaction(SIGCHLD, &sa, NULL);
     }
 
-    unlink(argv[1]);
-
     char* socket_path = argv[1];
     int nochilddaemon=1;
     int nodaemon=1;
@@ -155,6 +153,8 @@ int main(int argc, char* argv[], char* envp[]) {
         }
     }
 
+    unlink(socket_path);
+    
     memset(&addr, 0, sizeof(struct sockaddr_un));
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path) - 1);
