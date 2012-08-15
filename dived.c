@@ -56,12 +56,230 @@ struct dived_options {
     char* chroot_;
     char** envp;
     char* unshare_;
+    int inetd;
 } options;
+
+int serve_client(int fd, struct dived_options *opts) {
+    int ret;
+    
+    struct ucred cred;
+    socklen_t len = sizeof(struct ucred);
+    struct passwd *client_cred;
+    if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) == -1) {
+        perror("getsockopt SOL_SOCKET SO_PEERCRED");
+        if (!opts->noprivs) {
+            return 23;
+        }
+    } else {
+        client_cred = getpwuid(cred.uid);
+    }
+
+    //printf("pid=%ld, euid=%ld, egid=%ld\n", (long) cred.pid, (long) cred.uid, (long) cred.gid);
+    
+    if(!opts->nochilddaemon) daemon(0,0);
+    
+    long int version = VERSION;
+    safer_write(fd, (char*)&version, sizeof(version));
+    
+    /* Send pid */
+    pid_t mypid = getpid();
+    safer_write(fd, (char*)&mypid, sizeof(mypid));
+
+    /* Receive and apply umask */
+    mode_t umask_;
+    safer_read(fd, (char*)&umask_, sizeof(umask_));
+    if (opts->client_umask) umask(umask_);
+    
+    /* Receive and apply current directory */
+    int curdir = recv_fd(fd);
+    if (opts->client_chdir) fchdir(curdir);
+    close(curdir);
+    
+    /* Receive file descriptor to be controlling terminal */
+    int terminal_fd = recv_fd(fd);
+
+    /* Receive and apply file descriptors */
+    memset(saved_fdnums, 0, sizeof saved_fdnums);
+    for(;;) {
+        int i;
+        safer_read(fd, (char*)&i, sizeof(i));
+        if(i==-1) {
+            break;
+        }                    
+        if(i<-1 || i>=MAXFD) {
+            fprintf(stderr, "dived: Wrong file descriptor number %d\n", i);
+            return 7;
+        }
+        int f = recv_fd(fd);                
+        if(!opts->client_fds)continue;
+        if(i==fd) {
+            /* Move away our socket desciptor */
+            int tmp = dup(fd);
+            close(fd);
+            dup2(f, i);
+            fd = tmp;
+        } else {
+            if(f!=i) {
+                dup2(f, i);
+                close(f);
+            }
+        }
+        if(i<MAXFD) saved_fdnums[i]=1;
+    }
+
+    if (!opts->nosetsid) {
+        ret = setsid();
+    }
+    if (!opts->nocsctty) {
+        if (terminal_fd != -1) {
+            #ifndef TIOCSCTTY
+            #define TIOCSCTTY 0x540E
+            #endif
+            ioctl (0, TIOCSCTTY, 1);
+        }
+    }
+
+
+
+    /* Change into the appropriate user*/
+    if(!opts->noprivs) {
+        struct passwd *pw;                
+        uid_t targetuid = cred.uid;
+        gid_t targetgid = cred.gid;
+        
+        if (opts->forceuser) {
+            pw = getpwnam(opts->forceuser);
+            if (pw) {
+                targetuid = pw->pw_uid;
+                targetgid = pw->pw_gid;
+            }
+        } else {
+            /* By default it is user at the other end of the connection */
+            pw = client_cred;
+        }
+        
+        char *username = "";
+
+        if(pw) {
+            username = pw->pw_name;
+        }
+
+        initgroups(username, targetgid);
+        setgid(targetgid);
+        setuid(targetuid);
+    }
+
+    /* Not caring much about security since that point */
+
+
+    int pid2 = fork();
+
+    if (!pid2) {
+        /* Receive argv */
+        int numargs, totallen;
+        safer_read(fd, (char*)&numargs, sizeof(numargs));
+        safer_read(fd, (char*)&totallen, sizeof(totallen));
+
+        int forced_argv_count = opts->forced_argv_count;
+        char* args=(char*)malloc(totallen);
+        safer_read(fd, args, totallen);
+        if(!opts->client_argv) { numargs=0; totallen=0; }
+        char** argv=malloc((numargs+forced_argv_count+1)*sizeof(char*));
+        int i, u;
+        for(u=0; u<forced_argv_count; ++u) {
+            argv[u] = opts->forced_argv[u];
+        }
+        u=forced_argv_count; /* explicit > implicit */
+        argv[u]=args;
+        for(i=0; i<totallen; ++i) {
+            if (!args[i]) {
+                ++u;
+                argv[u]=args+i+1;
+            }
+        }
+        argv[forced_argv_count + numargs]=NULL;
+
+        
+        /* Receive environment */
+        safer_read(fd, (char*)&numargs, sizeof(numargs));
+        safer_read(fd, (char*)&totallen, sizeof(totallen));
+        char* env=(char*)malloc(totallen);
+        safer_read(fd, env, totallen);
+        char** envp_;
+        if (opts->client_environment) {
+            envp_=malloc((numargs+4+1)*sizeof(char*));
+            int was_zero = 1;
+            u=0;
+            for(i=0; i<totallen; ++i) {
+                if (was_zero) {
+                    was_zero = 0;
+                    if(!strncmp(env+i, "DIVE_", 5)) continue;
+                    envp_[u]=env+i;
+                    ++u;
+                    if(u>=numargs) break;
+                } 
+                if (!env[i]) {
+                    was_zero = 1;
+                }
+            }
+            char *buffer_uid = (char*)malloc(64);
+            char *buffer_gid = (char*)malloc(64);
+            char *buffer_pid = (char*)malloc(64);
+            char *buffer_user = (char*)malloc(1024);
+            snprintf(buffer_uid, 64, "DIVE_UID=%d", cred.uid);
+            snprintf(buffer_gid, 64, "DIVE_GID=%d", cred.gid);
+            snprintf(buffer_pid, 64, "DIVE_PID=%d", cred.pid);
+            if (client_cred) {
+                snprintf(buffer_user, 1024, "DIVE_USER=%s", client_cred->pw_name);
+            } else {
+                snprintf(buffer_user, 1024, "DIVE_USER=");
+            }
+            
+            envp_[u+0]=buffer_uid;
+            envp_[u+1]=buffer_gid;
+            envp_[u+2]=buffer_pid;
+            envp_[u+3]=buffer_user;
+            envp_[u+4]=NULL;
+        } else {
+            char buffer[64];
+            sprintf(buffer, "%d", cred.uid); setenv("DIVE_UID", buffer, 1);
+            sprintf(buffer, "%d", cred.gid); setenv("DIVE_GID", buffer, 1);
+            sprintf(buffer, "%d", cred.pid); setenv("DIVE_PID", buffer, 1);
+            if (client_cred) {
+                setenv("DIVE_USER", client_cred->pw_name, 1);
+            } else {
+                setenv("DIVE_USER", "", 1);
+            }
+            envp_ = environ;
+        }
+
+        close(fd);
+        execvpe(argv[0], argv, envp_);
+        exit(127);
+    }
+
+    /* Release client's fds */
+    int i;
+    for(i=0; i<MAXFD; ++i) {
+        if(saved_fdnums[i]) close(i);
+    }
+
+    int status;
+    waitpid(pid2, &status, 0);
+
+    int exitcode = WEXITSTATUS(status);
+    safer_write(fd, (char*)&exitcode, sizeof(exitcode));
+    return 0;
+}
 
 int serve(struct dived_options* opts) {
     int sock;
     struct sockaddr_un addr;
     int ret;
+    
+    if (opts->inetd) {
+        return serve_client(0, opts);
+    }
     
     unlink(opts->socket_path);
     
@@ -169,213 +387,7 @@ retry_accept:
 
         if(!childpid) {
             close(sock);
-            struct ucred cred;
-            socklen_t len = sizeof(struct ucred);
-            struct passwd *client_cred;
-            if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) == -1) {
-                perror("getsockopt SOL_SOCKET SO_PEERCRED");
-                return 23;
-            } else {
-                client_cred = getpwuid(cred.uid);
-            }
-
-            
-
-            //printf("pid=%ld, euid=%ld, egid=%ld\n", (long) cred.pid, (long) cred.uid, (long) cred.gid);
-            
-            if(!opts->nochilddaemon) daemon(0,0);
-            
-            long int version = VERSION;
-            safer_write(fd, (char*)&version, sizeof(version));
-            
-            /* Send pid */
-            pid_t mypid = getpid();
-            safer_write(fd, (char*)&mypid, sizeof(mypid));
-
-            /* Receive and apply umask */
-            mode_t umask_;
-            safer_read(fd, (char*)&umask_, sizeof(umask_));
-            if (opts->client_umask) umask(umask_);
-            
-            /* Receive and apply current directory */
-            int curdir = recv_fd(fd);
-            if (opts->client_chdir) fchdir(curdir);
-            close(curdir);
-            
-            /* Receive file descriptor to be controlling terminal */
-            int terminal_fd = recv_fd(fd);
-
-            /* Receive and apply file descriptors */
-            memset(saved_fdnums, 0, sizeof saved_fdnums);
-            for(;;) {
-                int i;
-                safer_read(fd, (char*)&i, sizeof(i));
-                if(i==-1) {
-                    break;
-                }                    
-                if(i<-1 || i>=MAXFD) {
-                    fprintf(stderr, "dived: Wrong file descriptor number %d\n", i);
-                    return 7;
-                }
-                int f = recv_fd(fd);                
-                if(!opts->client_fds)continue;
-                if(i==fd) {
-                    /* Move away our socket desciptor */
-                    int tmp = dup(fd);
-                    close(fd);
-                    dup2(f, i);
-                    fd = tmp;
-                } else {
-                    if(f!=i) {
-                        dup2(f, i);
-                        close(f);
-                    }
-                }
-                if(i<MAXFD) saved_fdnums[i]=1;
-            }
-
-            if (!opts->nosetsid) {
-                ret = setsid();
-            }
-            if (!opts->nocsctty) {
-                if (terminal_fd != -1) {
-                    #ifndef TIOCSCTTY
-                    #define TIOCSCTTY 0x540E
-                    #endif
-                    ioctl (0, TIOCSCTTY, 1);
-                }
-            }
-
-
-
-            /* Change into the appropriate user*/
-            if(!opts->noprivs) {
-                struct passwd *pw;                
-                uid_t targetuid = cred.uid;
-                gid_t targetgid = cred.gid;
-                
-                if (opts->forceuser) {
-                    pw = getpwnam(opts->forceuser);
-                    if (pw) {
-                        targetuid = pw->pw_uid;
-                        targetgid = pw->pw_gid;
-                    }
-                } else {
-                    /* By default it is user at the other end of the connection */
-                    pw = client_cred;
-                }
-                
-                char *username = "";
-
-                if(pw) {
-                    username = pw->pw_name;
-                }
-
-                initgroups(username, targetgid);
-                setgid(targetgid);
-                setuid(targetuid);
-            }
-
-            /* Not caring much about security since that point */
-
-
-            int pid2 = fork();
-
-            if (!pid2) {
-                /* Receive argv */
-                int numargs, totallen;
-                safer_read(fd, (char*)&numargs, sizeof(numargs));
-                safer_read(fd, (char*)&totallen, sizeof(totallen));
-
-                int forced_argv_count = opts->forced_argv_count;
-                char* args=(char*)malloc(totallen);
-                safer_read(fd, args, totallen);
-                if(!opts->client_argv) { numargs=0; totallen=0; }
-                char** argv=malloc((numargs+forced_argv_count+1)*sizeof(char*));
-                int i, u;
-                for(u=0; u<forced_argv_count; ++u) {
-                    argv[u] = opts->forced_argv[u];
-                }
-                u=forced_argv_count; /* explicit > implicit */
-                argv[u]=args;
-                for(i=0; i<totallen; ++i) {
-                    if (!args[i]) {
-                        ++u;
-                        argv[u]=args+i+1;
-                    }
-                }
-                argv[forced_argv_count + numargs]=NULL;
-
-                
-                /* Receive environment */
-                safer_read(fd, (char*)&numargs, sizeof(numargs));
-                safer_read(fd, (char*)&totallen, sizeof(totallen));
-                char* env=(char*)malloc(totallen);
-                safer_read(fd, env, totallen);
-                char** envp_;
-                if (opts->client_environment) {
-                    envp_=malloc((numargs+4+1)*sizeof(char*));
-                    int was_zero = 1;
-                    u=0;
-                    for(i=0; i<totallen; ++i) {
-                        if (was_zero) {
-                            was_zero = 0;
-                            if(!strncmp(env+i, "DIVE_", 5)) continue;
-                            envp_[u]=env+i;
-                            ++u;
-                            if(u>=numargs) break;
-                        } 
-                        if (!env[i]) {
-                            was_zero = 1;
-                        }
-                    }
-                    char *buffer_uid = (char*)malloc(64);
-                    char *buffer_gid = (char*)malloc(64);
-                    char *buffer_pid = (char*)malloc(64);
-                    char *buffer_user = (char*)malloc(1024);
-                    snprintf(buffer_uid, 64, "DIVE_UID=%d", cred.uid);
-                    snprintf(buffer_gid, 64, "DIVE_GID=%d", cred.gid);
-                    snprintf(buffer_pid, 64, "DIVE_PID=%d", cred.pid);
-                    if (client_cred) {
-                        snprintf(buffer_user, 1024, "DIVE_USER=%s", client_cred->pw_name);
-                    } else {
-                        snprintf(buffer_user, 1024, "DIVE_USER=");
-                    }
-                    
-                    envp_[u+0]=buffer_uid;
-                    envp_[u+1]=buffer_gid;
-                    envp_[u+2]=buffer_pid;
-                    envp_[u+3]=buffer_user;
-                    envp_[u+4]=NULL;
-                } else {
-                    char buffer[64];
-                    sprintf(buffer, "%d", cred.uid); setenv("DIVE_UID", buffer, 1);
-                    sprintf(buffer, "%d", cred.gid); setenv("DIVE_GID", buffer, 1);
-                    sprintf(buffer, "%d", cred.pid); setenv("DIVE_PID", buffer, 1);
-                    if (client_cred) {
-                        setenv("DIVE_USER", client_cred->pw_name, 1);
-                    } else {
-                        setenv("DIVE_USER", "", 1);
-                    }
-                    envp_ = environ;
-                }
-
-                close(fd);
-                execvpe(argv[0], argv, envp_);
-                exit(127);
-            }
-
-            /* Release client's fds */
-            int i;
-            for(i=0; i<MAXFD; ++i) {
-                if(saved_fdnums[i]) close(i);
-            }
-
-            int status;
-            waitpid(pid2, &status, 0);
-
-            int exitcode = WEXITSTATUS(status);
-            safer_write(fd, (char*)&exitcode, sizeof(exitcode));
+            serve_client(fd, opts);
             
             exit(1);
         } else {
@@ -390,10 +402,11 @@ int main(int argc, char* argv[], char* envp[]) {
     if(argc<2 || !strcmp(argv[1], "-?") || !strcmp(argv[1], "--help") || !strcmp(argv[1], "--version")) {
         printf("Dive server %s (proto %d) https://github.com/vi/dive/\n", VERSION2, VERSION);
         printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");
-        printf("Usage: dived socket_path [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] "
+        printf("Usage: dived {socket_path|-i} [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] "
                "[-C mode] [-U user:group] [-R directory] [-s smth1,smth2,...] "
                "[-- prepended commandline parts]\n");
         printf("          -d --detach           detach\n");
+        printf("          -i --inetd            serve once, interpred stdin as client socket\n");
         printf("          -D --children-daemon  call daemon(0,0) in children\n");
         printf("          -F --no-fork          no fork, serve once (debugging)\n");
         printf("          -P --no-setuid        no setuid/setgid/etc\n");
@@ -447,12 +460,17 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->chroot_ = NULL;
     opts->envp = envp;
     opts->unshare_ = NULL;
+    opts->inetd = 0;
+    if(!strcmp(argv[1], "-i") || !strcmp(argv[1], "--inetd")) { opts->inetd = 1; }
 
     {
         int i;
         for(i=2; i<argc; ++i) {
             if(!strcmp(argv[i], "-d") || !strcmp(argv[i], "--detach")) {
                 opts->nodaemon=0;
+            }else
+            if(!strcmp(argv[i], "-i") || !strcmp(argv[i], "--inetd")) {
+                opts->inetd=1;
             }else
             if(!strcmp(argv[i], "-D") || !strcmp(argv[i], "--children-daemon")) {
                 opts->nochilddaemon=0;
@@ -518,6 +536,14 @@ int main(int argc, char* argv[], char* envp[]) {
                 return 4;
             }
         }
+    }
+    
+    if (opts->nofork && opts->unshare_) {
+        fprintf(stderr, "Nofork and unshare options are incompatible\n");
+        return 14;
+    }
+    if (opts->inetd && opts->unshare_) {
+        fprintf(stderr, "Warning: each connected client will have it's own namespace\n");
     }
     
     if (!opts->unshare_) {
