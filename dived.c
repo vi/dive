@@ -217,7 +217,7 @@ int main(int argc, char* argv[], char* envp[]) {
     }
 
 
-    if(!nodaemon) daemon(0, 0);
+    if(!nodaemon) daemon(1, 0);
 
     /* Save pidfile */
     if (pidfile){
