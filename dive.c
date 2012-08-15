@@ -36,9 +36,9 @@ int main(int argc, char* argv[], char* envp[]) {
     int ret;
     long int version;
 
-    if(argc<3) {
+    if(argc<2 || !strcmp(argv[1], "-?") || !strcmp(argv[1], "--help") || !strcmp(argv[1], "--version")) {
         printf("Dive client %s (proto %d) https://github.com/vi/dive/\n", VERSION2, VERSION);
-        printf("Usage: dive socket_path program [arguments]\n");
+        printf("Usage: dive socket_path [program arguments]\n");
         printf("Start program in remote 'dived' and 'invite' it here by redirecting fds\n");
         printf("       If don't have normal \"bash\" behaviour by default, there's workaround command like that:\n");
         printf("       dive /path/to/socket socat -,raw,echo=0 exec:bash,pty,setsid,stderr\n");

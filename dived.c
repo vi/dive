@@ -39,7 +39,8 @@ int main(int argc, char* argv[]) {
     if(argc<2 || !strcmp(argv[1], "-?") || !strcmp(argv[1], "--help") || !strcmp(argv[1], "--version")) {
         printf("Dive server %s (proto %d) https://github.com/vi/dive/\n", VERSION2, VERSION);
         printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");
-        printf("Usage: dived socket_path [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-C mode] [-U user:group]\n");
+        printf("Usage: dived socket_path [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] "
+               "[-C mode] [-U user:group] [-- prepended commandline parts]\n");
         printf("          -d --detach           detach\n");
         printf("          -D --children-daemon  call daemon(0,0) in children\n");
         printf("          -F --no-fork          no fork, serve once (debugging)\n");
@@ -49,6 +50,10 @@ int main(int argc, char* argv[]) {
         printf("          -p --pidfile          save PID to this file\n");
         printf("          -C --chmod            chmod the socket to this mode (like '0777')\n");
         printf("          -U --chown            chown the socket to this user:group\n");
+        printf("          --                    prepend this to each command line ('--' is mandatory)\n");
+        printf("              Note that the program being strarted using \"--\" should be\n");
+        printf("              as secure as suid programs, but it doesn't know\n");
+        printf("              real uid/gid.\n");
         return 4;
     }
 
@@ -69,6 +74,8 @@ int main(int argc, char* argv[]) {
     char* pidfile=NULL;
     char* chmod_=NULL;
     char* chown_=NULL;
+    char** forced_argv = NULL;
+    int forced_argv_count = 0;
 
     {
         int i;
@@ -103,6 +110,11 @@ int main(int argc, char* argv[]) {
             if(!strcmp(argv[i], "-U") || !strcmp(argv[i], "--chown")) {
                 chown_=argv[i+1];
                 ++i;
+            }else
+            if(!strcmp(argv[i], "--")) {
+                forced_argv = &argv[i+1];
+                forced_argv_count = argc - (i+1);
+                break;
             }else
             {
                 fprintf(stderr, "Unknown argument %s\n", argv[i]);
@@ -317,17 +329,20 @@ retry_accept:
 
                 char* args=(char*)malloc(totallen);
                 safer_read(fd, args, totallen);
-                char** argv=malloc((numargs+1)*sizeof(char*));
+                char** argv=malloc((numargs+forced_argv_count+1)*sizeof(char*));
                 int i, u;
-                argv[0]=args;
-                u=0;
+                for(u=0; u<forced_argv_count; ++u) {
+                    argv[u] = forced_argv[u];
+                }
+                u=forced_argv_count; /* explicit > implicit */
+                argv[u]=args;
                 for(i=0; i<totallen; ++i) {
                     if (!args[i]) {
                         ++u;
                         argv[u]=args+i+1;
                     }
                 }
-                argv[numargs]=NULL;
+                argv[forced_argv_count + numargs]=NULL;
 
                 
                 /* Receive environment */
