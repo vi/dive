@@ -52,18 +52,34 @@ Grant Alice access to Bob.
     
 **Usage**
 
-    Usage: dived socket_path [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-C mode] [-U user:group]
-              -d   detach
-              -D   call daemon(0,0) in children
-              -F   no fork, serve once (debugging)
-              -P   no setuid/setgid/etc
-              -u   setuid to this user instead of the client
-              -S   no sedsid/ioctl TIOCSCTTY
-              -p   save PID to this file
-              -C   chmod the socket to this mode (like '0777')
-              -U   chown the socket to this user:group
-              
-    Usage: dive socket_path program [arguments]
+    Usage: dived socket_path [-d] [-D] [-F] [-P] [-S] 
+          [-p pidfile] [-u user] [-C mode] [-U user:group] 
+          [-R chroot_directory] [-s smth1,smth2,...] 
+          [-- prepended commandline parts]
+              -d --detach           detach
+              -D --children-daemon  call daemon(0,0) in children
+              -F --no-fork          no fork, serve once (debugging)
+              -P --no-setuid        no setuid/setgid/etc
+              -u --user             setuid to this user instead of the client
+              -S --no-setsid        no sedsid/ioctl TIOCSCTTY
+              -R --chroot           chroot to this directory 
+                  Note that current directory stays on unchrooted filesystem 
+              -s --unshare          Unshare this (comma-separated list); also detaches
+                                    ipc,net,fs,pid,uts
+              -p --pidfile          save PID to this file
+              -C --chmod            chmod the socket to this mode (like '0777')
+              -U --chown            chown the socket to this user:group
+              -E --no-environment   Don't let client set environment variables
+              -A --no-argv          Don't let client set command line
+              -H --no-chdir         Don't let client set current directory
+              -O --no-fds           Don't let client set file descriptors
+              -M --no-umask         Don't let client set umask
+              --                    prepend this to each command line ('--' is mandatory)
+                  Note that the program being strarted using "--" should be
+                  as secure as suid programs, but it doesn't know
+                  real uid/gid.
+                  
+    Usage: dive socket_path [program arguments]
     
 **Features**
     
@@ -74,6 +90,8 @@ Grant Alice access to Bob.
 * Setting session ID and controlling terminal, for clean bash without "no job control" (requires root access)
 * Preserving of environment variables
 * Preserving of exit code
+* Selective disabling of "preserving" parts above (from v0.5)
+* Chroot / CLONE_NEW... / forced command line (from v0.5)
 
 **Notes**
 
