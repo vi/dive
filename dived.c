@@ -60,6 +60,7 @@ struct dived_options {
     int inetd;
     int client_chroot;
     int root_to_current;
+    char* authentication_program;
 } options;
 
 int serve_client(int fd, struct dived_options *opts) {
@@ -118,6 +119,12 @@ int serve_client(int fd, struct dived_options *opts) {
             }
         }
         if(i<MAXFD) saved_fdnums[i]=1;
+    }
+
+    if (opts->authentication_program) {
+        if (system(opts->authentication_program)) {
+            return 1;
+        }
     }
 
     /* Receive and apply umask */
@@ -439,7 +446,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("Dive server %s (proto %d) https://github.com/vi/dive/\n", VERSION2, VERSION);
         printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");
         printf("Usage: dived {socket_path|@abstract_address|-i} [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] "
-               "[-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] "
+               "[-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] [-a \"program\"] "
                "[-- prepended commandline parts]\n");
         printf("          -d --detach           detach\n");
         printf("          -i --inetd            serve once, interpred stdin as client socket\n");
@@ -447,6 +454,10 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -F --no-fork          no fork, serve once (debugging)\n");
         printf("          -P --no-setuid        no setuid/setgid/etc\n");
         printf("          -u --user             setuid to this user instead of the client\n");
+        printf("          -a --authenticate     start this program for authentication\n");
+        printf("              The program is started using \"system\" after file descriptors are received\n");
+        printf("              from client, but before everything else (root, current dir, environment) is received.\n");
+        printf("              Nonzero exit code => rejected client.\n");
         printf("          -S --no-setsid        no setsid\n");
         printf("          -T --no-csctty        no ioctl TIOCSCTTY\n");
         printf("          -R --chroot           chroot to this directory \n");
@@ -502,6 +513,7 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->inetd = 0;
     opts->client_chroot = 0;
     opts->root_to_current = 0;
+    opts->authentication_program = NULL;
     if(!strcmp(argv[1], "-i") || !strcmp(argv[1], "--inetd")) { opts->inetd = 1; }
 
     {
@@ -572,6 +584,10 @@ int main(int argc, char* argv[], char* envp[]) {
             }else
             if(!strcmp(argv[i], "-W") || !strcmp(argv[i], "--root-to-current")) {
                 opts->root_to_current = 1;
+            }else
+            if(!strcmp(argv[i], "-a") || !strcmp(argv[i], "--authenticate")) {
+                opts->authentication_program = argv[i+1];
+                ++i;
             }else
             if(!strcmp(argv[i], "--")) {
                 opts->forced_argv = &argv[i+1];
