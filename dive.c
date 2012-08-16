@@ -46,7 +46,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("    Environment variables:\n");
         printf("    DIVE_CURDIR   - use this current directory instead of \".\"\n");
         printf("    DIVE_ROOTDIR  - use this root directory instead of \"/\"\n");
-        printf("    DIVE_TERMINAL - use this instead of \"/dev/tty\"\n");
+        printf("    DIVE_TERMINAL - use this instead of \"@0\" (can be path to file or @fd)\n");
         printf("    Note that DIVE_* variables are filtered out by dived.\n");
         return 4;
     }
@@ -60,7 +60,7 @@ int main(int argc, char* argv[], char* envp[]) {
 
     const char* curdir_path  = ".";
     const char* rootdir_path = "/";
-    const char* terminal_path = "/dev/tty";
+    const char* terminal_path = "@0";
     if (getenv("DIVE_CURDIR"))   curdir_path   = getenv("DIVE_CURDIR");
     if (getenv("DIVE_ROOTDIR"))  rootdir_path  = getenv("DIVE_ROOTDIR");
     if (getenv("DIVE_TERMINAL")) terminal_path = getenv("DIVE_TERMINAL");
