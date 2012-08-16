@@ -114,6 +114,7 @@ int serve_client(int fd, struct dived_options *opts) {
             closedir(curdir);
         }        
     }
+    close(rootdir);
     
     /* Receive and apply current directory */
     int curdir = recv_fd(fd);
@@ -165,6 +166,8 @@ int serve_client(int fd, struct dived_options *opts) {
             ioctl (terminal_fd, TIOCSCTTY, 1);
         }
     }
+
+    close(terminal_fd);
 
 
 
