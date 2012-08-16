@@ -154,6 +154,7 @@ int serve_client(int fd, struct dived_options *opts) {
     }
 
     if (!opts->nosetsid) {
+        setpgid(0, getppid());
         ret = setsid();
     }
     if (!opts->nocsctty) {
