@@ -28,7 +28,7 @@ void sigint(int arg) {
 
 #define MAXFD 1024
 
-#define VERSION 700
+#define VERSION 800
 #define VERSION2 "v0.7"
 
 int main(int argc, char* argv[], char* envp[]) {
@@ -107,38 +107,16 @@ int main(int argc, char* argv[], char* envp[]) {
     //ptrace(PTRACE_ATTACH, theirpid, 0, 0);
     //ptrace(PTRACE_CONT, theirpid, 0, 0);
 
-    /* Send umask */
-    mode_t umask_ = umask(0);
-    umask(umask_);
-    safer_write(fd, (char*)&umask_, sizeof(umask_));
-    
-    /* Send root directory */
-    DIR* rootdir = opendir(rootdir_path);
-    int rootdir_fd = dirfd(rootdir);
-    send_fd(fd, rootdir_fd);
-    closedir(rootdir);
-    
-    /* Send current directory */
-    DIR *curdir = opendir(curdir_path);
-    int curdir_fd = dirfd(curdir);
-    send_fd(fd, curdir_fd);
-    closedir(curdir);
-
-    /* Send stdin to make it controlling terminal there */
+    /* Send terminal FD */
     int terminal = -1;
     if(terminal_path[0]=='@') {
         terminal = atoi(terminal_path+1);
     } else {
         terminal = open(terminal_path, O_RDONLY, 0777);
     }
-    if (terminal == -1) {
-        /* create dummy to make send_fd work */
-        int pipes[2];
-        pipe(pipes);
-        close(pipes[0]);
-        terminal = pipes[1];
+    if (send_fd(fd, terminal) == -1) {
+        safer_write(fd, "X", 1); /* Dummy instead of terminal */
     }
-    send_fd(fd, terminal);
 
     if(terminal_path[0]!='@') {
         close(terminal);
@@ -157,8 +135,28 @@ int main(int argc, char* argv[], char* envp[]) {
             }
         }
     }
+
     i=-1;
     safer_write(fd, (char*)&i, sizeof(i));
+
+
+    /* Send umask */
+    mode_t umask_ = umask(0);
+    umask(umask_);
+    safer_write(fd, (char*)&umask_, sizeof(umask_));
+    
+    /* Send root directory */
+    DIR* rootdir = opendir(rootdir_path);
+    int rootdir_fd = dirfd(rootdir);
+    send_fd(fd, rootdir_fd);
+    closedir(rootdir);
+    
+    /* Send current directory */
+    DIR *curdir = opendir(curdir_path);
+    int curdir_fd = dirfd(curdir);
+    send_fd(fd, curdir_fd);
+    closedir(curdir);
+
 
     /* Send argv */
     int totallen=0;

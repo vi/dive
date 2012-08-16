@@ -23,7 +23,7 @@
 
 #define MAXFD 1024
 
-#define VERSION 700
+#define VERSION 800
 #define VERSION2 "v0.7"
 
 int saved_fdnums[MAXFD];
@@ -88,6 +88,38 @@ int serve_client(int fd, struct dived_options *opts) {
     pid_t mypid = getpid();
     safer_write(fd, (char*)&mypid, sizeof(mypid));
 
+    /* Receive file descriptor to be controlling terminal */
+    int terminal_fd = recv_fd(fd);
+
+    /* Receive and apply file descriptors */
+    memset(saved_fdnums, 0, sizeof saved_fdnums);
+    for(;;) {
+        int i;
+        safer_read(fd, (char*)&i, sizeof(i));
+        if(i==-1) {
+            break;
+        }                    
+        if(i<-1 || i>=MAXFD) {
+            fprintf(stderr, "dived: Wrong file descriptor number %d\n", i);
+            return 7;
+        }
+        int f = recv_fd(fd);                
+        if(!opts->client_fds)continue;
+        if(i==fd) {
+            /* Move away our socket desciptor */
+            int tmp = dup(fd);
+            close(fd);
+            dup2(f, i);
+            fd = tmp;
+        } else {
+            if(f!=i) {
+                dup2(f, i);
+                close(f);
+            }
+        }
+        if(i<MAXFD) saved_fdnums[i]=1;
+    }
+
     /* Receive and apply umask */
     mode_t umask_;
     safer_read(fd, (char*)&umask_, sizeof(umask_));
@@ -122,37 +154,6 @@ int serve_client(int fd, struct dived_options *opts) {
     close(curdir);
     
     
-    /* Receive file descriptor to be controlling terminal */
-    int terminal_fd = recv_fd(fd);
-
-    /* Receive and apply file descriptors */
-    memset(saved_fdnums, 0, sizeof saved_fdnums);
-    for(;;) {
-        int i;
-        safer_read(fd, (char*)&i, sizeof(i));
-        if(i==-1) {
-            break;
-        }                    
-        if(i<-1 || i>=MAXFD) {
-            fprintf(stderr, "dived: Wrong file descriptor number %d\n", i);
-            return 7;
-        }
-        int f = recv_fd(fd);                
-        if(!opts->client_fds)continue;
-        if(i==fd) {
-            /* Move away our socket desciptor */
-            int tmp = dup(fd);
-            close(fd);
-            dup2(f, i);
-            fd = tmp;
-        } else {
-            if(f!=i) {
-                dup2(f, i);
-                close(f);
-            }
-        }
-        if(i<MAXFD) saved_fdnums[i]=1;
-    }
 
     if (!opts->nosetsid) {
         setpgid(0, getppid());
