@@ -43,6 +43,8 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("Start program in remote 'dived' and 'invite' it here by redirecting fds\n");
         printf("       If don't have normal \"bash\" behaviour by default, there's workaround command like that:\n");
         printf("       dive /path/to/socket socat -,raw,echo=0 exec:bash,pty,setsid,stderr\n");
+        printf("       If calling shell loses terminal ownership, there is workaround:\n");
+        printf("       reptyr -L dive /path/to/socket bash\n");
         printf("    Environment variables:\n");
         printf("    DIVE_CURDIR   - use this current directory instead of \".\"\n");
         printf("    DIVE_ROOTDIR  - use this root directory instead of \"/\"\n");
