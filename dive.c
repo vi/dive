@@ -14,6 +14,7 @@
 #include <dirent.h>
 #include <signal.h>
 #include <sys/stat.h>
+#include  <fcntl.h>
 
 #include "send_fd.h"
 #include "safer.h"
@@ -42,6 +43,11 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("Start program in remote 'dived' and 'invite' it here by redirecting fds\n");
         printf("       If don't have normal \"bash\" behaviour by default, there's workaround command like that:\n");
         printf("       dive /path/to/socket socat -,raw,echo=0 exec:bash,pty,setsid,stderr\n");
+        printf("    Environment variables:\n");
+        printf("    DIVE_CURDIR   - use this current directory instead of \".\"\n");
+        printf("    DIVE_ROOTDIR  - use this root directory instead of \"/\"\n");
+        printf("    DIVE_TERMINAL - use this instead of \"/dev/tty\"\n");
+        printf("    Note that DIVE_* variables are filtered out by dived.\n");
         return 4;
     }
    
@@ -51,6 +57,14 @@ int main(int argc, char* argv[], char* envp[]) {
         sigaction(SIGINT, &sa, NULL);
     }
     */
+
+    const char* curdir_path  = ".";
+    const char* rootdir_path = "/";
+    const char* terminal_path = "/dev/tty";
+    if (getenv("DIVE_CURDIR"))   curdir_path   = getenv("DIVE_CURDIR");
+    if (getenv("DIVE_ROOTDIR"))  rootdir_path  = getenv("DIVE_ROOTDIR");
+    if (getenv("DIVE_TERMINAL")) terminal_path = getenv("DIVE_TERMINAL");
+
 
     memset(&addr, 0, sizeof(struct sockaddr_un));
     addr.sun_family = AF_UNIX;
@@ -93,19 +107,36 @@ int main(int argc, char* argv[], char* envp[]) {
     safer_write(fd, (char*)&umask_, sizeof(umask_));
     
     /* Send root directory */
-    DIR* rootdir = opendir("/");
+    DIR* rootdir = opendir(rootdir_path);
     int rootdir_fd = dirfd(rootdir);
     send_fd(fd, rootdir_fd);
     closedir(rootdir);
     
     /* Send current directory */
-    DIR *curdir = opendir(".");
+    DIR *curdir = opendir(curdir_path);
     int curdir_fd = dirfd(curdir);
     send_fd(fd, curdir_fd);
     closedir(curdir);
 
     /* Send stdin to make it controlling terminal there */
-    send_fd(fd, 0);
+    int terminal = -1;
+    if(terminal_path[0]=='@') {
+        terminal = atoi(terminal_path+1);
+    } else {
+        terminal = open(terminal_path, O_RDONLY, 0777);
+    }
+    if (terminal == -1) {
+        /* create dummy to make send_fd work */
+        int pipes[2];
+        pipe(pipes);
+        close(pipes[0]);
+        terminal = pipes[1];
+    }
+    send_fd(fd, terminal);
+
+    if(terminal_path[0]!='@') {
+        close(terminal);
+    }
     
     /* Send and close all file descriptors */
     int i, u;
