@@ -308,11 +308,16 @@ int serve(struct dived_options* opts) {
         return serve_client(0, opts);
     }
     
-    unlink(opts->socket_path);
+    if(opts->socket_path[0]!='@') {
+        unlink(opts->socket_path);
+    }
     
     memset(&addr, 0, sizeof(struct sockaddr_un));
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, opts->socket_path, sizeof(addr.sun_path) - 1);
+    if (addr.sun_path[0]=='@') {
+        addr.sun_path[0]=0; /* Abstract socket */
+    }
 
     sock = socket(AF_UNIX, SOCK_STREAM, 0);
     if (sock==-1) {
@@ -429,7 +434,7 @@ int main(int argc, char* argv[], char* envp[]) {
     if(argc<2 || !strcmp(argv[1], "-?") || !strcmp(argv[1], "--help") || !strcmp(argv[1], "--version")) {
         printf("Dive server %s (proto %d) https://github.com/vi/dive/\n", VERSION2, VERSION);
         printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");
-        printf("Usage: dived {socket_path|-i} [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] "
+        printf("Usage: dived {socket_path|@abstract_address|-i} [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] "
                "[-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] "
                "[-- prepended commandline parts]\n");
         printf("          -d --detach           detach\n");
