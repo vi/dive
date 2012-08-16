@@ -161,7 +161,7 @@ int serve_client(int fd, struct dived_options *opts) {
             #ifndef TIOCSCTTY
             #define TIOCSCTTY 0x540E
             #endif
-            ioctl (0, TIOCSCTTY, 1);
+            ioctl (terminal_fd, TIOCSCTTY, 1);
         }
     }
 
