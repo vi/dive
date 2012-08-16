@@ -68,7 +68,7 @@ int serve_client(int fd, struct dived_options *opts) {
     
     struct ucred cred;
     socklen_t len = sizeof(struct ucred);
-    struct passwd *client_cred;
+    struct passwd *client_cred = NULL;
     if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) == -1) {
         perror("getsockopt SOL_SOCKET SO_PEERCRED");
         if (!opts->noprivs) {
@@ -76,6 +76,17 @@ int serve_client(int fd, struct dived_options *opts) {
         }
     } else {
         client_cred = getpwuid(cred.uid);
+    }
+    {
+        char buffer[64];
+        sprintf(buffer, "%d", cred.uid); setenv("DIVE_UID", buffer, 1);
+        sprintf(buffer, "%d", cred.gid); setenv("DIVE_GID", buffer, 1);
+        sprintf(buffer, "%d", cred.pid); setenv("DIVE_PID", buffer, 1);
+        if (client_cred) {
+            setenv("DIVE_USER", client_cred->pw_name, 1);
+        } else {
+            setenv("DIVE_USER", "", 1);
+        }
     }
 
     //printf("pid=%ld, euid=%ld, egid=%ld\n", (long) cred.pid, (long) cred.uid, (long) cred.gid);
@@ -279,15 +290,6 @@ int serve_client(int fd, struct dived_options *opts) {
             envp_[u+3]=buffer_user;
             envp_[u+4]=NULL;
         } else {
-            char buffer[64];
-            sprintf(buffer, "%d", cred.uid); setenv("DIVE_UID", buffer, 1);
-            sprintf(buffer, "%d", cred.gid); setenv("DIVE_GID", buffer, 1);
-            sprintf(buffer, "%d", cred.pid); setenv("DIVE_PID", buffer, 1);
-            if (client_cred) {
-                setenv("DIVE_USER", client_cred->pw_name, 1);
-            } else {
-                setenv("DIVE_USER", "", 1);
-            }
             envp_ = environ;
         }
 
