@@ -133,7 +133,7 @@ Allow certain users execute certain programs (script in some directory) as root.
 
 * For clean interactive shell access dived need to be started as root (for setsid/TIOCSCTTY)
     * Without TIOCSCTTY, use `socat -,raw,echo=0 exec:bash,pty,setsid,stderr` (there's hind in `dive`'s usage message) as the program to start to have nicer bash
-    * With TIOCSCTTY it steams controlling terminal from the previous process (leaving it "homeless"), so "exec dive socket bash" is preferred (or workaround with [reptyr](http://github.com/vi/reptyr) is needed).
+    * With TIOCSCTTY it steams controlling terminal from the previous process (leaving it "homeless"), so "exec dive socket bash" is preferred (or workaround with [reptyr](https://github.com/nelhage/reptyr/tree/subcommand) >= v0.4 is needed).
 * Current directory can be "smuggled" into unshare where that part of filesystem is not mounted
  
 
