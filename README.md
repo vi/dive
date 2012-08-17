@@ -77,19 +77,43 @@ Allow certain users execute certain programs (script in some directory) as root.
     Forbidden at /root/scripts/suidless_sudo line 7.
     
     
+**Authentication example**
+
+dived supports starting external programs for authentication. 
+The program is started when file descriptors are already received from client, but
+environtment, controlling terminal (if any), root and current directories, user and
+umask are still original. Nonzero exit code from authentication program rejects the client.
+
+    root# dived @boblogin --detach --user bob --authenticate 'user=bob /root/askpassword' -- bash
+
+    alice$ HOME=/home/bob dive @boblogin
+      bob's Password: 
+    bob$ exit
+    alice$ dive @boblogin
+      bob's Password: 
+      Go away! (('Authentication failure', 7))
+      dive: Something failed with the server
+    alice$ 
+
+
+"@boblogin" is abstract UNIX socket. "askpassword" program is included in source repository (uses python-pam).
 
     
 **Usage**
 
-    Usage: dived {socket_path|-i} [-d] [-D] [-F] [-P] [-S] 
-    [-p pidfile] [-u user] [-C mode] [-U user:group] [-R directory] [-r [-W]]
-    [-s smth1,smth2,...] [-- prepended commandline parts]
+    Usage: dived {socket_path|@abstract_address|-i} [-d] [-D] [-F] [-P] [-S] [-p pidfile] 
+    [-u user] [-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] 
+    [-a "program"] [-- prepended commandline parts]
               -d --detach           detach
               -i --inetd            serve once, interpred stdin as client socket
               -D --children-daemon  call daemon(0,0) in children
               -F --no-fork          no fork, serve once (debugging)
               -P --no-setuid        no setuid/setgid/etc
               -u --user             setuid to this user instead of the client
+              -a --authenticate     start this program for authentication
+                  The program is started using "system" after file descriptors are received
+                  from client, but before everything else (root, current dir, environment) is received.
+                  Nonzero exit code => rejected client.
               -S --no-setsid        no setsid
               -T --no-csctty        no ioctl TIOCSCTTY
               -R --chroot           chroot to this directory 
@@ -111,6 +135,7 @@ Allow certain users execute certain programs (script in some directory) as root.
                   Note that the program beingnocsctty strarted using "--" should be
                   as secure as suid programs, but it doesn't know
                   real uid/gid.
+
 
                       
         Usage: dive socket_path [program arguments]
