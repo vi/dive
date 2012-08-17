@@ -44,7 +44,8 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("       If don't have normal \"bash\" behaviour by default, there's workaround commands like that:\n");
         printf("         dive /path/to/socket reptyr -L bash\n");
         printf("         dive /path/to/socket socat -,raw,echo=0 exec:bash,pty,setsid,stderr\n");
-        printf("       If calling shell loses terminal ownership, there is workaround:\n");
+        printf("       If calling shell loses terminal ownership, there are workarounds:\n");
+        printf("         \"exec bash\" after using dive (to regain the terminal)\n");
         printf("         reptyr -L dive /path/to/socket bash\n");
         printf("    Environment variables:\n");
         printf("    DIVE_CURDIR   - use this current directory instead of \".\"\n");
