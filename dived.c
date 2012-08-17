@@ -24,7 +24,7 @@
 #define MAXFD 1024
 
 #define VERSION 800
-#define VERSION2 "v0.7"
+#define VERSION2 "v0.8"
 
 int saved_fdnums[MAXFD];
 
