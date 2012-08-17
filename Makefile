@@ -12,4 +12,6 @@ install:
 	install -m 755 dive ${prefix}/bin/
 	install -m 755 dived ${prefix}/bin/
 	
+deb: dived dive
+	fakeroot ./makedeb.sh
 	
