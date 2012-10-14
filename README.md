@@ -76,6 +76,29 @@ Allow certain users execute certain programs (script in some directory) as root.
     bob$ DIVE_USER=alice dive /var/run/suidless_sudo reboot
     Forbidden at /root/scripts/suidless_sudo line 7.
     
+** Ping without suidbit example **
+
+Allow users access to ping (but not to `ping -f`) without suidbit:
+
+    root# cp /bin/ping /root/ping # loses suidbit
+    root# dived  /var/run/pinger --detach --effective-user root --chmod 777 --no-environment  --no-chdir  -- /root/ping
+    
+    alice$ dive /var/run/pinger 127.0.0.1
+    PING 127.0.0.1 (127.0.0.1) 56(84) bytes of data.
+    64 bytes from 127.0.0.1: icmp_req=1 ttl=64 time=0.163 ms
+    64 bytes from 127.0.0.1: icmp_req=2 ttl=64 time=0.108 ms
+    ^C
+    --- 127.0.0.1 ping statistics ---
+    2 packets transmitted, 2 received, 0% packet loss, time 1002ms
+    rtt min/avg/max/mdev = 0.108/0.135/0.163/0.029 ms
+    dive: Something failed with the server
+    
+    alice$ dive /var/run/pinger -f 127.0.0.1
+    PING 127.0.0.1 (127.0.0.1) 56(84) bytes of data.
+    ping: cannot flood; minimal interval, allowed for user, is 200ms
+
+TODO: Implement specifying the indifidual capabilities.
+    
     
 **Authentication example**
 

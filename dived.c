@@ -44,6 +44,7 @@ struct dived_options {
     int nosetsid;
     int nocsctty;
     char* forceuser;
+    char* effective_user;
     char* pidfile;
     char* chmod_;
     char* chown_;
@@ -195,6 +196,7 @@ int serve_client(int fd, struct dived_options *opts) {
         struct passwd *pw;                
         uid_t targetuid = cred.uid;
         gid_t targetgid = cred.gid;
+
         
         if (opts->forceuser) {
             pw = getpwnam(opts->forceuser);
@@ -207,6 +209,21 @@ int serve_client(int fd, struct dived_options *opts) {
             pw = client_cred;
         }
         
+        uid_t effective_user = targetuid;
+        gid_t effective_group = targetgid;
+        
+        if (opts->effective_user) {
+            struct passwd *pw_e;
+            pw_e = getpwnam(opts->effective_user);
+            if (pw_e) {
+                effective_user = pw_e->pw_uid;
+                effective_group = pw_e->pw_gid;
+            } else {
+                effective_user = atoi(opts->effective_user);
+            }
+        }
+        
+        
         char *username = "";
 
         if(pw) {
@@ -214,8 +231,13 @@ int serve_client(int fd, struct dived_options *opts) {
         }
 
         initgroups(username, targetgid);
-        setgid(targetgid);
-        setuid(targetuid);
+        if (!opts->effective_user) {
+            setgid(targetgid);
+            setuid(targetuid);
+        } else {
+            setregid(targetgid, effective_group);
+            setreuid(targetuid, effective_user);
+        }
     }
 
     /* Not caring much about security since that point */
@@ -447,7 +469,7 @@ int main(int argc, char* argv[], char* envp[]) {
     if(argc<2 || !strcmp(argv[1], "-?") || !strcmp(argv[1], "--help") || !strcmp(argv[1], "--version")) {
         printf("Dive server %s (proto %d) https://github.com/vi/dive/\n", VERSION2, VERSION);
         printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");
-        printf("Usage: dived {socket_path|@abstract_address|-i} [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] "
+        printf("Usage: dived {socket_path|@abstract_address|-i} [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-e effective_user] "
                "[-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] [-a \"program\"] "
                "[-- prepended commandline parts]\n");
         printf("          -d --detach           detach\n");
@@ -456,6 +478,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -F --no-fork          no fork, serve once (debugging)\n");
         printf("          -P --no-setuid        no setuid/setgid/etc\n");
         printf("          -u --user             setuid to this user instead of the client\n");
+        printf("          -e --effective-user   seteuid to this user instead of the client\n");
         printf("          -a --authenticate     start this program for authentication\n");
         printf("              The program is started using \"system\" after file descriptors are received\n");
         printf("              from client, but before everything else (root, current dir, environment) is received.\n");
@@ -499,6 +522,7 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->nosetsid=0;
     opts->nocsctty=0;
     opts->forceuser=NULL;
+    opts->effective_user=NULL;
     opts->pidfile=NULL;
     opts->chmod_=NULL;
     opts->chown_=NULL;
@@ -544,6 +568,10 @@ int main(int argc, char* argv[], char* envp[]) {
             }else
             if(!strcmp(argv[i], "-u") || !strcmp(argv[i], "--user")) {
                 opts->forceuser=argv[i+1];
+                ++i;
+            }else
+            if(!strcmp(argv[i], "-e") || !strcmp(argv[i], "--effective-user")) {
+                opts->effective_user=argv[i+1];
                 ++i;
             }else
             if(!strcmp(argv[i], "-p") || !strcmp(argv[i], "--pidfile")) {
