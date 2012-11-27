@@ -39,6 +39,7 @@ void sigchild(int arg) {
 }
 
 struct dived_options {
+    int sock;
     char* socket_path;
     int nochilddaemon;
     int nodaemon;
@@ -66,6 +67,8 @@ struct dived_options {
     int root_to_current;
     char* authentication_program;
 } options;
+
+
 
 int serve_client(int fd, struct dived_options *opts) {
     int ret;
@@ -337,101 +340,16 @@ int serve_client(int fd, struct dived_options *opts) {
     return 0;
 }
 
+
+
+
 int serve(struct dived_options* opts) {
-    int sock;
-    struct sockaddr_un addr;
-    int ret;
-    
-    if (opts->inetd) {
-        return serve_client(0, opts);
-    }
-    
-    if(opts->socket_path[0]!='@') {
-        unlink(opts->socket_path);
-    }
-    
-    memset(&addr, 0, sizeof(struct sockaddr_un));
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, opts->socket_path, sizeof(addr.sun_path) - 1);
-    if (addr.sun_path[0]=='@') {
-        addr.sun_path[0]=0; /* Abstract socket */
-    }
+    int sock = opts->sock;
 
-    sock = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (sock==-1) {
-        perror("socket AF_UNIX");
-        return 1;
-    }
-
-    ret = bind(sock, (struct sockaddr *) &addr, sizeof(struct sockaddr_un));
-    if (ret == -1) {
-        perror("bind");
-        return 2;
-    }
-    
-    ret = listen(sock, 10);
-    if (ret == -1) {
-        perror("listen");
-        return 3;
-    }
-    
-    if (opts->chown_) {
-        char *usern = strtok(opts->chown_, ":");
-        char *groupn = strtok(NULL, ":");
-        if (!groupn) {
-            fprintf(stderr, "chown parameter should be in format \"user:group\"\n");
-            return 12;
-        }
-        uid_t targetuid;
-        gid_t targetgid;
-        
-        char* endnum;
-        targetuid = strtol(usern, &endnum, 10);
-        if (errno || endnum == usern || *endnum) {
-            /* not a number */
-            struct passwd *userp = getpwnam(usern);
-            if (!userp) {
-                fprintf(stderr, "User %s not found (and not a number)\n", usern);
-                return 12;
-            }
-            targetuid = userp->pw_uid;
-        }
-        
-        targetgid = strtol(groupn, &endnum, 10);
-        if (errno || endnum == groupn || *endnum) {
-            struct group *groupp = getgrnam(groupn);
-            if (!groupp) {
-                fprintf(stderr, "Group %s not found (and not a number)\n", groupn);
-                return 13;
-            }
-            targetgid = groupp->gr_gid;
-        }
-        
-        if (chown(opts->socket_path, targetuid, targetgid) == -1) {
-            perror("chown");
-            return 14;
-        }
-    }
-    
-    if (opts->chmod_) {
-        long mask_decoded = strtol(opts->chmod_, NULL, 8);
-        if (chmod(opts->socket_path, mask_decoded) == -1) {
-            perror("chmod");
-            return 15;
-        }
-    }
-    
-    /* Save pidfile */
-    if (opts->pidfile && !opts->unshare_){
-        FILE* f = fopen(opts->pidfile, "w");
-        fprintf(f, "%d\n", getpid());
-        fclose(f);
-    }
-        
     if (opts->chroot_) {
         chroot(opts->chroot_);
     }
-
+    
     for(;;) {
         struct sockaddr_un addr2;
         socklen_t addrlen = sizeof(addr2);
@@ -463,6 +381,9 @@ retry_accept:
     }
     return 0;
 }
+
+
+
 
 int main(int argc, char* argv[], char* envp[]) {
     if(argc<2 || !strcmp(argv[1], "-?") || !strcmp(argv[1], "--help") || !strcmp(argv[1], "--version")) {
@@ -635,11 +556,104 @@ int main(int argc, char* argv[], char* envp[]) {
         return 14;
     }
     if (opts->inetd && opts->unshare_) {
-        fprintf(stderr, "Warning: each connected client will have it's own namespace\n");
+        fprintf(stderr, "--inetd and --unshare are incompatible\n");
+        return 15;
     }
     
     if(!opts->nodaemon) daemon(1, 0);
     
+    
+    if (opts->inetd) {
+        return serve_client(0, opts);
+    }
+    
+    struct sockaddr_un addr;
+    int ret;
+    int sock;
+    
+    if(opts->socket_path[0]!='@') {
+        unlink(opts->socket_path);
+    }
+    
+    memset(&addr, 0, sizeof(struct sockaddr_un));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, opts->socket_path, sizeof(addr.sun_path) - 1);
+    if (addr.sun_path[0]=='@') {
+        addr.sun_path[0]=0; /* Abstract socket */
+    }
+
+    sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sock==-1) {
+        perror("socket AF_UNIX");
+        return 1;
+    }
+    opts->sock = sock;
+
+    ret = bind(sock, (struct sockaddr *) &addr, sizeof(struct sockaddr_un));
+    if (ret == -1) {
+        perror("bind");
+        return 2;
+    }
+    
+    ret = listen(sock, 10);
+    if (ret == -1) {
+        perror("listen");
+        return 3;
+    }
+    
+    if (opts->chown_) {
+        char *usern = strtok(opts->chown_, ":");
+        char *groupn = strtok(NULL, ":");
+        if (!groupn) {
+            fprintf(stderr, "chown parameter should be in format \"user:group\"\n");
+            return 12;
+        }
+        uid_t targetuid;
+        gid_t targetgid;
+        
+        char* endnum;
+        targetuid = strtol(usern, &endnum, 10);
+        if (errno || endnum == usern || *endnum) {
+            /* not a number */
+            struct passwd *userp = getpwnam(usern);
+            if (!userp) {
+                fprintf(stderr, "User %s not found (and not a number)\n", usern);
+                return 12;
+            }
+            targetuid = userp->pw_uid;
+        }
+        
+        targetgid = strtol(groupn, &endnum, 10);
+        if (errno || endnum == groupn || *endnum) {
+            struct group *groupp = getgrnam(groupn);
+            if (!groupp) {
+                fprintf(stderr, "Group %s not found (and not a number)\n", groupn);
+                return 13;
+            }
+            targetgid = groupp->gr_gid;
+        }
+        
+        if (chown(opts->socket_path, targetuid, targetgid) == -1) {
+            perror("chown");
+            return 14;
+        }
+    }
+    
+    if (opts->chmod_) {
+        long mask_decoded = strtol(opts->chmod_, NULL, 8);
+        if (chmod(opts->socket_path, mask_decoded) == -1) {
+            perror("chmod");
+            return 15;
+        }
+    }
+    
+    /* Save pidfile */
+    if (opts->pidfile && !opts->unshare_){
+        FILE* f = fopen(opts->pidfile, "w");
+        fprintf(f, "%d\n", getpid());
+        fclose(f);
+    }
+        
     if (!opts->unshare_) {
         return serve(opts);
     } else {
