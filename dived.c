@@ -24,7 +24,7 @@
 #define MAXFD 1024
 
 #define VERSION 800
-#define VERSION2 "v0.9"
+#define VERSION2 "v1.0"
 
 #define CLONE_STACK_SIZE  (1024*16)
 // For use with "--unshare"
@@ -700,7 +700,7 @@ int main(int argc, char* argv[], char* envp[]) {
         }
         
         if (opts->nodaemon) {
-            /* Now just block until explicitly killed */
+            /* Now just block until explicitly killed. Without this our cloned thread will be terminated. */
             for(;;) sleep(3600);
         }
         
