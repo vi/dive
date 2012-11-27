@@ -26,6 +26,9 @@
 #define VERSION 800
 #define VERSION2 "v0.9"
 
+#define CLONE_STACK_SIZE  (1024*16)
+// For use with "--unshare"
+
 int saved_fdnums[MAXFD];
 
 extern char **environ;
@@ -656,9 +659,7 @@ int main(int argc, char* argv[], char* envp[]) {
             }
         }
         
-        int stacksize = 1024*16;
-        
-        char* stack = malloc(stacksize);
+        char* stack = malloc(CLONE_STACK_SIZE);
         char* stack_pointer = stack;
         
         #ifndef CPU_STACK_GROWS_UP
@@ -673,7 +674,7 @@ int main(int argc, char* argv[], char* envp[]) {
         #define TRUE (1)
         #endif
         
-        stack_pointer += (CPU_STACK_GROWS_UP) ? 0 : stacksize;
+        stack_pointer += (CPU_STACK_GROWS_UP) ? 0 : CLONE_STACK_SIZE;
         int cpid = clone( (int(*)(void*)) serve, stack_pointer, CLONE_VM|flags, opts);
         if (cpid == -1) {
             perror("clone");
