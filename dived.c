@@ -656,8 +656,24 @@ int main(int argc, char* argv[], char* envp[]) {
             }
         }
         
-        char* stack = malloc(1024*16);
-        int cpid = clone( (int(*)(void*)) serve, stack, CLONE_VM|flags, opts);
+        int stacksize = 1024*16;
+        char* stack = malloc(stacksize);
+        char* stack_pointer = stack;
+        
+        #ifndef CPU_STACK_GROWS_UP
+        #define CPU_STACK_GROWS_UP FALSE
+        #endif
+        
+        #ifndef FALSE
+        #define FALSE (0)
+        #endif
+        
+        #ifndef TRUE
+        #define TRUE (1)
+        #endif
+        
+        stack_pointer += (CPU_STACK_GROWS_UP) ? 0 : stacksize;
+        int cpid = clone( (int(*)(void*)) serve, stack_pointer, CLONE_VM|flags, opts);
         if (cpid == -1) {
             perror("clone");
             return 19;
