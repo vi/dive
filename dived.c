@@ -679,6 +679,8 @@ int main(int argc, char* argv[], char* envp[]) {
             perror("clone");
             return 19;
         }
+        /* Now just block until explicitly killed */
+        for(;;) sleep(3600);
         return 0; 
     }
 }
