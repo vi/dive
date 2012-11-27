@@ -420,9 +420,6 @@ int serve(struct dived_options* opts) {
             return 15;
         }
     }
-
-
-    if(!opts->nodaemon) daemon(1, 0);
         
     if (opts->chroot_) {
         chroot(opts->chroot_);
@@ -642,6 +639,8 @@ int main(int argc, char* argv[], char* envp[]) {
         fprintf(stderr, "Warning: each connected client will have it's own namespace\n");
     }
     
+    if(!opts->nodaemon) daemon(1, 0);
+    
     if (!opts->unshare_) {
         return serve(opts);
     } else {
@@ -687,8 +686,10 @@ int main(int argc, char* argv[], char* envp[]) {
             fclose(f);
         }
         
-        /* Now just block until explicitly killed */
-        for(;;) sleep(3600);
+        if (opts->nodaemon) {
+            /* Now just block until explicitly killed */
+            for(;;) sleep(3600);
+        }
         
         return 0; 
     }
