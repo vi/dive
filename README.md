@@ -24,6 +24,8 @@ Works by sending file descriptors over UNIX socket.
         link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
         inet 127.0.0.1/8 scope host lo
     # # our network configuration persisted
+    
+Use `dived socket --unshare net` instead of `unshare -n dived socket` on kernels around v2.6.32.
 
 **Multi-user example**
 
