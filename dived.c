@@ -24,7 +24,7 @@
 #define MAXFD 1024
 
 #define VERSION 800
-#define VERSION2 "v0.8"
+#define VERSION2 "v0.9"
 
 int saved_fdnums[MAXFD];
 
@@ -657,6 +657,7 @@ int main(int argc, char* argv[], char* envp[]) {
         }
         
         int stacksize = 1024*16;
+        
         char* stack = malloc(stacksize);
         char* stack_pointer = stack;
         
