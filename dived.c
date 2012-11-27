@@ -420,18 +420,17 @@ int serve(struct dived_options* opts) {
             return 15;
         }
     }
-        
-    if (opts->chroot_) {
-        chroot(opts->chroot_);
-    }
-
+    
     /* Save pidfile */
     if (opts->pidfile && !opts->unshare_){
         FILE* f = fopen(opts->pidfile, "w");
         fprintf(f, "%d\n", getpid());
         fclose(f);
     }
-
+        
+    if (opts->chroot_) {
+        chroot(opts->chroot_);
+    }
 
     for(;;) {
         struct sockaddr_un addr2;
