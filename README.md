@@ -1,4 +1,7 @@
-Start processes in other network/mount/whatever namespace, as created by `unshare` or `lxc-start`. Also allow users execute programs in other user account or in chroot in controlled way (like sudo, but without setuid-bit in filesystem).
+Start processes in other network/mount/whatever namespace, as created by `unshare` or `lxc-start` 
+(as long as there is a shared filesytem between the host and container and you use recent enough Linux kernel). 
+Also allow users execute programs in other user account or in chroot in controlled way 
+(like sudo, but without setuid-bit in filesystem).
 
 Works by sending file descriptors over UNIX socket. 
 
