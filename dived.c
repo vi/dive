@@ -426,7 +426,7 @@ int serve(struct dived_options* opts) {
     }
 
     /* Save pidfile */
-    if (opts->pidfile){
+    if (opts->pidfile && !opts->unshare_){
         FILE* f = fopen(opts->pidfile, "w");
         fprintf(f, "%d\n", getpid());
         fclose(f);
@@ -679,8 +679,16 @@ int main(int argc, char* argv[], char* envp[]) {
             perror("clone");
             return 19;
         }
+        
+        if (opts->pidfile){
+            FILE* f = fopen(opts->pidfile, "w");
+            fprintf(f, "%d\n", cpid);
+            fclose(f);
+        }
+        
         /* Now just block until explicitly killed */
         for(;;) sleep(3600);
+        
         return 0; 
     }
 }
