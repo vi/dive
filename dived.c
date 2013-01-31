@@ -72,6 +72,10 @@ struct dived_options {
 
 int serve_client(int fd, struct dived_options *opts) {
     int ret;
+
+    if (opts->chroot_) {
+        chroot(opts->chroot_);
+    }
     
     struct ucred cred;
     socklen_t len = sizeof(struct ucred);
@@ -346,10 +350,6 @@ int serve_client(int fd, struct dived_options *opts) {
 int serve(struct dived_options* opts) {
     int sock = opts->sock;
 
-    if (opts->chroot_) {
-        chroot(opts->chroot_);
-    }
-    
     for(;;) {
         struct sockaddr_un addr2;
         socklen_t addrlen = sizeof(addr2);
