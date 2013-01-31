@@ -183,6 +183,9 @@ umask are still original. Nonzero exit code from authentication program rejects 
 * Allowing clients to set it's own root directory ("-r" option)
 * Setting of PR_SET_NO_NEW_PRIVS to turn off filesystem-based permission elevations
 * Setting Linux capabilities
+* "Just execute" feature to use capabilities, chroot, PR_SET_NO_NEW_PRIVS
+ setup; "authenticate", pidfile and so on without any "remote startup" thought
+ socket at all
 
 For less feature-creep version see "nocreep" branch
 

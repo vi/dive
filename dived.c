@@ -73,12 +73,14 @@ struct dived_options {
     char* remove_capabilities;
     char* set_capabilities;
     int no_new_privs;
+    int just_execute;
 } options;
 
 
 
 int serve_client(int fd, struct dived_options *opts) {
     int ret;
+    (void)ret;
 
     if (opts->chroot_) {
         chroot(opts->chroot_);
@@ -87,6 +89,9 @@ int serve_client(int fd, struct dived_options *opts) {
     struct ucred cred;
     socklen_t len = sizeof(struct ucred);
     struct passwd *client_cred = NULL;
+    
+    if (!opts->just_execute) {
+    
     if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) == -1) {
         perror("getsockopt SOL_SOCKET SO_PEERCRED");
         if (!opts->noprivs) {
@@ -94,6 +99,13 @@ int serve_client(int fd, struct dived_options *opts) {
         }
     } else {
         client_cred = getpwuid(cred.uid);
+    }
+    
+    } else {
+        // --just-execute
+        cred.uid = getuid();
+        cred.gid = getgid();
+        cred.pid = getpid();
     }
     {
         char buffer[64];
@@ -111,6 +123,10 @@ int serve_client(int fd, struct dived_options *opts) {
     
     if(!opts->nochilddaemon) daemon(0,0);
     
+    int terminal_fd = -1;
+    
+    if (!opts->just_execute) {
+
     long int version = VERSION;
     safer_write(fd, (char*)&version, sizeof(version));
     
@@ -119,7 +135,7 @@ int serve_client(int fd, struct dived_options *opts) {
     safer_write(fd, (char*)&mypid, sizeof(mypid));
 
     /* Receive file descriptor to be controlling terminal */
-    int terminal_fd = recv_fd(fd);
+    terminal_fd = recv_fd(fd);
 
     /* Receive and apply file descriptors */
     memset(saved_fdnums, 0, sizeof saved_fdnums);
@@ -149,6 +165,8 @@ int serve_client(int fd, struct dived_options *opts) {
         }
         if(i<MAXFD) saved_fdnums[i]=1;
     }
+    
+    }  // !--just-execute
 
     if (opts->authentication_program) {
         if (system(opts->authentication_program)) {
@@ -156,6 +174,8 @@ int serve_client(int fd, struct dived_options *opts) {
         }
     }
 
+    if (!opts->just_execute) {
+    
     /* Receive and apply umask */
     mode_t umask_;
     safer_read(fd, (char*)&umask_, sizeof(umask_));
@@ -194,11 +214,13 @@ int serve_client(int fd, struct dived_options *opts) {
         }
     }
     close(curdir);
+    
+    } // !--just-execute
 
 
     if (!opts->nosetsid) {
         setpgid(0, getppid());
-        ret = setsid();
+        setsid();
     }
     if (!opts->nocsctty) {
         if (terminal_fd != -1) {
@@ -360,9 +382,14 @@ int serve_client(int fd, struct dived_options *opts) {
     /* Not caring much about security since that point */
 
 
-    int pid2 = fork();
+    int pid2 = 0;
+    if (!opts->just_execute) {
+        pid2 = fork();
+    }
 
     if (!pid2) {
+        if (!opts->just_execute) {
+        
         /* Receive argv */
         int numargs, totallen;
         safer_read(fd, (char*)&numargs, sizeof(numargs));
@@ -386,7 +413,6 @@ int serve_client(int fd, struct dived_options *opts) {
             }
         }
         argv[forced_argv_count + numargs]=NULL;
-
         
         /* Receive environment */
         safer_read(fd, (char*)&numargs, sizeof(numargs));
@@ -435,6 +461,13 @@ int serve_client(int fd, struct dived_options *opts) {
         close(fd);
         execvpe(argv[0], argv, envp_);
         exit(127);
+        
+        } else {
+            // --just-execute
+            
+            close(fd);
+            execvp(opts->forced_argv[0], opts->forced_argv);
+        }
     }
 
     /* Release client's fds */
@@ -496,12 +529,14 @@ int main(int argc, char* argv[], char* envp[]) {
     if(argc<2 || !strcmp(argv[1], "-?") || !strcmp(argv[1], "--help") || !strcmp(argv[1], "--version")) {
         printf("Dive server %s (proto %d) https://github.com/vi/dive/\n", VERSION2, VERSION);
         printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");
-        printf("Usage: dived {socket_path|@abstract_address|-i} [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-e effective_user] "
+        printf("Usage: dived {socket_path|@abstract_address|-i|-J} [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-e effective_user] "
                "[-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] [-a \"program\"] "
                "[{-B cap_smth1,cap_smth2|-b cap_smth1,cap_smth2}] [-X] [-c 'cap_smth+eip cap_smth2+i'] "
                "[-- prepended commandline parts]\n");
         printf("          -d --detach           detach\n");
         printf("          -i --inetd            serve once, interpred stdin as client socket\n");
+        printf("          -J --just-execute     don't mess with sockets at all, just execute the program.\n");
+        printf("                                Other options does apply.\n");
         printf("          -D --children-daemon  call daemon(0,0) in children\n");
         printf("          -F --no-fork          no fork, serve once (debugging)\n");
         printf("          -P --no-setuid        no setuid/setgid/etc\n");
@@ -576,7 +611,9 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->retain_capabilities = NULL;
     opts->remove_capabilities = NULL;
     opts->no_new_privs = 0;
+    opts->just_execute = 0;
     if(!strcmp(argv[1], "-i") || !strcmp(argv[1], "--inetd")) { opts->inetd = 1; }
+    if(!strcmp(argv[1], "-J") || !strcmp(argv[1], "--just-execute")) { opts->just_execute = 1; }
 
     {
         int i;
@@ -691,11 +728,22 @@ int main(int argc, char* argv[], char* envp[]) {
         return 15;
     }
     
+    if (opts->just_execute && opts->inetd) {
+        fprintf(stderr, "--just-execute and --inetd are incompatible");
+    }
+    
+    if (opts->just_execute && opts->unshare_) {
+        fprintf(stderr, "--just-execute and --unshare are incompatible");
+    }
+    
     if(!opts->nodaemon) daemon(1, 0);
     
     
     if (opts->inetd) {
         return serve_client(0, opts);
+    } 
+    if (opts->just_execute) {
+        return serve_client(-1, opts);
     }
     
     struct sockaddr_un addr;
