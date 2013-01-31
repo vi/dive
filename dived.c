@@ -70,6 +70,7 @@ struct dived_options {
     char* authentication_program;
     char* retain_capabilities;
     char* remove_capabilities;
+    int no_new_privs;
 } options;
 
 
@@ -325,7 +326,17 @@ int serve_client(int fd, struct dived_options *opts) {
             setregid(targetgid, effective_group);
             setreuid(targetuid, effective_user);
         }
+    }
+    
+    if (opts->no_new_privs) {
+        #ifndef PR_SET_NO_NEW_PRIVS
+        #define PR_SET_NO_NEW_PRIVS 38
+        #endif
         
+        if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == -1) {
+            perror("prctl(PR_SET_NO_NEW_PRIVS)");
+            return -1;
+        }
     }
 
     /* Not caring much about security since that point */
@@ -469,7 +480,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");
         printf("Usage: dived {socket_path|@abstract_address|-i} [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-e effective_user] "
                "[-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] [-a \"program\"] "
-               "[{-B cap_smth1,cap_smth2|-b cap_smth1,cap_smth2}] "
+               "[{-B cap_smth1,cap_smth2|-b cap_smth1,cap_smth2}] [-X]"
                "[-- prepended commandline parts]\n");
         printf("          -d --detach           detach\n");
         printf("          -i --inetd            serve once, interpred stdin as client socket\n");
@@ -481,6 +492,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -B --retain-capabilities Remove all capabilities from bounding set\n");
         printf("                                   except of specified ones\n");
         printf("          -b --remove-capabilities Remove capabilities from bounding set\n");
+        printf("          -X --no-new-privs     set PR_SET_NO_NEW_PRIVS\n");
         printf("          -a --authenticate     start this program for authentication\n");
         printf("              The program is started using \"system\" after file descriptors are received\n");
         printf("              from client, but before everything else (root, current dir, environment) is received.\n");
@@ -544,6 +556,7 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->authentication_program = NULL;
     opts->retain_capabilities = NULL;
     opts->remove_capabilities = NULL;
+    opts->no_new_privs = 0;
     if(!strcmp(argv[1], "-i") || !strcmp(argv[1], "--inetd")) { opts->inetd = 1; }
 
     {
@@ -630,6 +643,9 @@ int main(int argc, char* argv[], char* envp[]) {
             if(!strcmp(argv[i], "-b") || !strcmp(argv[i], "--remove-capabilities")) {
                 opts->remove_capabilities = argv[i+1];
                 ++i;
+            }else
+            if(!strcmp(argv[i], "-X") || !strcmp(argv[i], "--no-new-privs")) {
+                opts->no_new_privs = 1;
             }else
             if(!strcmp(argv[i], "--")) {
                 opts->forced_argv = &argv[i+1];
