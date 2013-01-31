@@ -247,11 +247,11 @@ int serve_client(int fd, struct dived_options *opts) {
 
         initgroups(username, targetgid);
         if (!opts->effective_user) {
-            setgid(targetgid);
-            setuid(targetuid);
+            if(setgid(targetgid) == -1) { perror("setgid"); return -1; }
+            if(setuid(targetuid) == -1) { perror("setuid"); return -1; }
         } else {
-            setregid(targetgid, effective_group);
-            setreuid(targetuid, effective_user);
+            if(setregid(targetgid, effective_group) == -1) { perror("setregid"); return -1; }
+            if(setreuid(targetuid, effective_user) == -1) { perror("setregid"); return -1; }
         }
     }
 
