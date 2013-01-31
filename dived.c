@@ -281,7 +281,7 @@ int serve_client(int fd, struct dived_options *opts) {
                         also_remove_CAP_SETPCAP = 1;
                         continue;
                     }
-                    if(prctl(PR_CAPBSET_DROP, c, 0, 0)==-1) {                
+                    if(prctl(PR_CAPBSET_DROP, c, 0, 0, 0)==-1) {                
                         perror("prctl");
                         return -1;
                     }
@@ -311,7 +311,7 @@ int serve_client(int fd, struct dived_options *opts) {
                 for(i=0; i<100; ++i) {
                     if(!retain_set[i]) {
                         if(i!=CAP_SETPCAP) {
-                            if(prctl(PR_CAPBSET_DROP, i, 0, 0)==-1) {   
+                            if(prctl(PR_CAPBSET_DROP, i, 0, 0, 0)==-1) {   
                                 if(errno==EINVAL) {
                                     continue;
                                 }
@@ -325,7 +325,7 @@ int serve_client(int fd, struct dived_options *opts) {
                 }
             }
             if (also_remove_CAP_SETPCAP) {
-                if(prctl(PR_CAPBSET_DROP, CAP_SETPCAP, 0, 0)==-1) {                
+                if(prctl(PR_CAPBSET_DROP, CAP_SETPCAP, 0, 0, 0)==-1) {                
                     perror("prctl");
                     return -1;
                 }
