@@ -179,10 +179,15 @@ int serve_client(int fd, struct dived_options *opts) {
     
     /* Receive and apply current directory */
     int curdir = recv_fd(fd);
-    if (opts->client_chdir) fchdir(curdir);
+    if (!opts->root_to_current) {
+        if (opts->client_chdir) fchdir(curdir);
+    } else {
+        if (!opts->client_chroot) {
+            chdir("/");
+        }
+    }
     close(curdir);
-    
-    
+
 
     if (!opts->nosetsid) {
         setpgid(0, getppid());
@@ -406,10 +411,10 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -S --no-setsid        no setsid\n");
         printf("          -T --no-csctty        no ioctl TIOCSCTTY\n");
         printf("          -R --chroot           chroot to this directory \n");
-        printf("              Note that current directory stays on unchrooted filesystem \n");
+        printf("              Note that current directory stays on unchrooted filesystem; use -W option to prevent.\n");
         printf("          -r --client-chroot    Allow arbitrary chroot from client\n");
         printf("          -W --root-to-current  Set server's root directory as current directory\n");
-        printf("                                (for using with '-r' and '-H' simultaneously)\n");
+        printf("                                (implies -H; useful with -r)\n");
         printf("          -s --unshare          Unshare this (comma-separated list); also detaches\n");
         printf("                                ipc,net,fs,pid,uts\n");
         printf("          -p --pidfile          save PID to this file\n");
