@@ -177,17 +177,22 @@ umask are still original. Nonzero exit code from authentication program rejects 
 * Setting session ID and controlling terminal, for clean bash without "no job control" (requires root access)
 * Preserving of environment variables
 * Preserving of exit code
-* Selective disabling of "preserving" parts above (from v0.5)
-* Chroot / CLONE_NEW... / forced command line (from v0.5)
+* Selective disabling of "preserving" parts above 
+* Chroot / CLONE_NEW... / forced command line
 * Setting of DIVE_USER and other variables according to client credentials
 * Allowing clients to set it's own root directory ("-r" option)
+* Setting of PR_SET_NO_NEW_PRIVS to turn off filesystem-based permission elevations
+* Setting Linux capabilities
+
+For less feature-creep version see "nocreep" branch
+
 
 **Notes**
 
 * For clean interactive shell access dived need to be started as root (for setsid/TIOCSCTTY)
     * Without TIOCSCTTY, use `socat -,raw,echo=0 exec:bash,pty,setsid,stderr` (there's hind in `dive`'s usage message) as the program to start to have nicer bash
     * With TIOCSCTTY it steams controlling terminal from the previous process (leaving it "homeless"), so "exec dive socket bash" is preferred (or workaround with [reptyr](https://github.com/nelhage/reptyr) >= v0.4 is needed).
-* Current directory can be "smuggled" into unshare where that part of filesystem is not mounted
+* Current directory can be "smuggled" into the chroot or unshare where that part of filesystem is not mounted (can be prevented using -W or -H options)
  
 
  There are pre-built i386 binaries for [dive](http://vi-server.org/pub/dive) and [dived](http://vi-server.org/pub/dived).
