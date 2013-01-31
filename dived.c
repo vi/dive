@@ -70,6 +70,7 @@ struct dived_options {
     char* authentication_program;
     char* retain_capabilities;
     char* remove_capabilities;
+    char* set_capabilities;
     int no_new_privs;
 } options;
 
@@ -250,6 +251,19 @@ int serve_client(int fd, struct dived_options *opts) {
             username = pw->pw_name;
         }
 
+        if (opts->set_capabilities) {
+            cap_t c = cap_from_text(opts->set_capabilities);
+            if (c==NULL) {
+                perror("cap_from_text");
+                return -1;
+            }
+            if (cap_set_proc(c) == -1) {
+                perror("caps_set_proc");
+                return -1;
+            }
+            cap_free(c);
+        }
+        
         if (opts->remove_capabilities || opts->retain_capabilities) {      
             int also_remove_CAP_SETPCAP = 0;      
             
@@ -480,7 +494,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");
         printf("Usage: dived {socket_path|@abstract_address|-i} [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-e effective_user] "
                "[-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] [-a \"program\"] "
-               "[{-B cap_smth1,cap_smth2|-b cap_smth1,cap_smth2}] [-X]"
+               "[{-B cap_smth1,cap_smth2|-b cap_smth1,cap_smth2}] [-X] [-c 'cap_smth+eip cap_smth2+i'] "
                "[-- prepended commandline parts]\n");
         printf("          -d --detach           detach\n");
         printf("          -i --inetd            serve once, interpred stdin as client socket\n");
@@ -492,6 +506,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -B --retain-capabilities Remove all capabilities from bounding set\n");
         printf("                                   except of specified ones\n");
         printf("          -b --remove-capabilities Remove capabilities from bounding set\n");
+        printf("          -c --set-capabilities cap_set_proc this\n");
         printf("          -X --no-new-privs     set PR_SET_NO_NEW_PRIVS\n");
         printf("          -a --authenticate     start this program for authentication\n");
         printf("              The program is started using \"system\" after file descriptors are received\n");
@@ -646,6 +661,10 @@ int main(int argc, char* argv[], char* envp[]) {
             }else
             if(!strcmp(argv[i], "-X") || !strcmp(argv[i], "--no-new-privs")) {
                 opts->no_new_privs = 1;
+            }else
+            if(!strcmp(argv[i], "-c") || !strcmp(argv[i], "--set-capabilities")) {
+                opts->set_capabilities = argv[i+1];
+                ++i;
             }else
             if(!strcmp(argv[i], "--")) {
                 opts->forced_argv = &argv[i+1];
