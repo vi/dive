@@ -19,6 +19,7 @@
 #include <dirent.h>
 #include <sys/capability.h>
 #include <sys/prctl.h>
+#include <linux/securebits.h>
 
 #include "recv_fd.h"
 #include "safer.h"
@@ -211,6 +212,9 @@ int serve_client(int fd, struct dived_options *opts) {
     close(terminal_fd);
 
 
+    if (opts->set_capabilities) {
+        prctl(PR_SET_SECUREBITS, SECBIT_KEEP_CAPS, 0, 0);
+    }
 
     /* Change into the appropriate user*/
     if(!opts->noprivs) {
@@ -249,19 +253,6 @@ int serve_client(int fd, struct dived_options *opts) {
 
         if(pw) {
             username = pw->pw_name;
-        }
-
-        if (opts->set_capabilities) {
-            cap_t c = cap_from_text(opts->set_capabilities);
-            if (c==NULL) {
-                perror("cap_from_text");
-                return -1;
-            }
-            if (cap_set_proc(c) == -1) {
-                perror("caps_set_proc");
-                return -1;
-            }
-            cap_free(c);
         }
         
         if (opts->remove_capabilities || opts->retain_capabilities) {      
@@ -340,6 +331,19 @@ int serve_client(int fd, struct dived_options *opts) {
             if(setregid(targetgid, effective_group) == -1) { perror("setregid"); return -1; }
             if(setreuid(targetuid, effective_user) == -1) { perror("setregid"); return -1; }
         }
+    }
+    
+    if (opts->set_capabilities) {            
+        cap_t c = cap_from_text(opts->set_capabilities);
+        if (c==NULL) {
+            perror("cap_from_text");
+            return -1;
+        }
+        if (cap_set_proc(c) == -1) {
+            perror("caps_set_proc");
+            return -1;
+        }
+        cap_free(c);
     }
     
     if (opts->no_new_privs) {
