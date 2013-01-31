@@ -17,6 +17,8 @@
 #include <signal.h>
 #include <errno.h>
 #include <dirent.h>
+#include <sys/capability.h>
+#include <sys/prctl.h>
 
 #include "recv_fd.h"
 #include "safer.h"
@@ -66,6 +68,8 @@ struct dived_options {
     int client_chroot;
     int root_to_current;
     char* authentication_program;
+    char* retain_capabilities;
+    char* remove_capabilities;
 } options;
 
 
@@ -245,6 +249,74 @@ int serve_client(int fd, struct dived_options *opts) {
             username = pw->pw_name;
         }
 
+        if (opts->remove_capabilities || opts->retain_capabilities) {      
+            int also_remove_CAP_SETPCAP = 0;      
+            
+            if (opts->remove_capabilities ) {
+                
+                char* q = strtok(opts->remove_capabilities, ",");
+                for(; q; q=strtok(NULL, ",")) {                
+                    cap_value_t c=-1;
+                    cap_from_name(q, &c);
+                    if(c==-1) {
+                        perror("cap_from_name");
+                        return -1;
+                    }
+                    if (c == CAP_SETPCAP) {
+                        also_remove_CAP_SETPCAP = 1;
+                        continue;
+                    }
+                    if(prctl(PR_CAPBSET_DROP, c, 0, 0)==-1) {                
+                        perror("prctl");
+                        return -1;
+                    }
+                }
+            } else {
+                // retain capabilities
+                
+                #define MAXCAPS 100
+                
+                unsigned char retain_set[MAXCAPS] = {0};
+                
+                char* q = strtok(opts->retain_capabilities, ",");
+                for(; q; q=strtok(NULL, ",")) {                
+                    cap_value_t c=-1;
+                    cap_from_name(q, &c);
+                    if(c==-1) {
+                        perror("cap_from_name");
+                        return -1;
+                    }
+                    if (c<MAXCAPS) {
+                        retain_set[c] = 1;
+                    }
+                }
+                
+                cap_value_t i;
+                
+                for(i=0; i<100; ++i) {
+                    if(!retain_set[i]) {
+                        if(i!=CAP_SETPCAP) {
+                            if(prctl(PR_CAPBSET_DROP, i, 0, 0)==-1) {   
+                                if(errno==EINVAL) {
+                                    continue;
+                                }
+                                perror("prctl");
+                                return -1;
+                            }
+                        } else {
+                            also_remove_CAP_SETPCAP = 1;
+                        }
+                    } 
+                }
+            }
+            if (also_remove_CAP_SETPCAP) {
+                if(prctl(PR_CAPBSET_DROP, CAP_SETPCAP, 0, 0)==-1) {                
+                    perror("prctl");
+                    return -1;
+                }
+            }
+        }
+        
         initgroups(username, targetgid);
         if (!opts->effective_user) {
             setgid(targetgid);
@@ -253,6 +325,7 @@ int serve_client(int fd, struct dived_options *opts) {
             setregid(targetgid, effective_group);
             setreuid(targetuid, effective_user);
         }
+        
     }
 
     /* Not caring much about security since that point */
@@ -396,6 +469,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");
         printf("Usage: dived {socket_path|@abstract_address|-i} [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-e effective_user] "
                "[-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] [-a \"program\"] "
+               "[{-B cap_smth1,cap_smth2|-b cap_smth1,cap_smth2}] "
                "[-- prepended commandline parts]\n");
         printf("          -d --detach           detach\n");
         printf("          -i --inetd            serve once, interpred stdin as client socket\n");
@@ -404,6 +478,9 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -P --no-setuid        no setuid/setgid/etc\n");
         printf("          -u --user             setuid to this user instead of the client\n");
         printf("          -e --effective-user   seteuid to this user instead of the client\n");
+        printf("          -B --retain-capabilities Remove all capabilities from bounding set\n");
+        printf("                                   except of specified ones\n");
+        printf("          -b --remove-capabilities Remove capabilities from bounding set\n");
         printf("          -a --authenticate     start this program for authentication\n");
         printf("              The program is started using \"system\" after file descriptors are received\n");
         printf("              from client, but before everything else (root, current dir, environment) is received.\n");
@@ -465,6 +542,8 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->client_chroot = 0;
     opts->root_to_current = 0;
     opts->authentication_program = NULL;
+    opts->retain_capabilities = NULL;
+    opts->remove_capabilities = NULL;
     if(!strcmp(argv[1], "-i") || !strcmp(argv[1], "--inetd")) { opts->inetd = 1; }
 
     {
@@ -542,6 +621,14 @@ int main(int argc, char* argv[], char* envp[]) {
             }else
             if(!strcmp(argv[i], "-a") || !strcmp(argv[i], "--authenticate")) {
                 opts->authentication_program = argv[i+1];
+                ++i;
+            }else
+            if(!strcmp(argv[i], "-B") || !strcmp(argv[i], "--retain-capabilities")) {
+                opts->retain_capabilities = argv[i+1];
+                ++i;
+            }else
+            if(!strcmp(argv[i], "-b") || !strcmp(argv[i], "--remove-capabilities")) {
+                opts->remove_capabilities = argv[i+1];
                 ++i;
             }else
             if(!strcmp(argv[i], "--")) {
