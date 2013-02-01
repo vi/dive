@@ -115,7 +115,7 @@ bob$ DIVE_USER=alice dive /var/run/suidless_sudo reboot
 Forbidden at /root/scripts/suidless_sudo line 7.
 </code></pre>
 
-<h2> Ping without suidbit example 1</h1>
+<h2> Ping without suidbit example 1</h2>
 
 <p>Allow users access to ping (but not to <code>ping -f</code>) without suidbit:</p>
 
@@ -137,7 +137,18 @@ PING 127.0.0.1 (127.0.0.1) 56(84) bytes of data.
 ping: cannot flood; minimal interval, allowed for user, is 200ms
 </code></pre>
 
-<p><s>TODO: Implement specifying the indifidual capabilities.</s> done</p>
+
+<h2> Ping without suidbit example 2</h2>
+
+<p>Like previous one, but with minimal necessary capabilities for ping:</p>
+
+<pre><code>root# cp /bin/ping /root/ping
+root# setcap =ei /root/ping
+root# dived  /var/run/pinger --detach  --chmod 777 \
+         --no-environment  --no-chdir \
+         --no-new-privs --set-capabilities cap_net_raw+ip -B cap_net_raw \
+         -- /root/ping
+</code></pre>
 
 <h2>Authentication example</h2>
 
@@ -159,6 +170,35 @@ alice$
 </code></pre>
 
 <p>"@boblogin" is abstract UNIX socket. "askpassword" program is included in source repository (uses python-pam).</p>
+
+
+
+<h2>"Just run" example</h2>
+
+<p>There are many options in dived that affect what happens before the program begin execve'd. --just-run option allow use them without messing with UNIX sockets.</p>
+
+<p>In this mode dived works as poor man's:
+<ul>
+<li><strong>su</strong> : --user and/or --effective-user options</li>
+<li><strong>chroot</strong> : --chroot option</li>
+<li><strong><a href="http://libslack.org/daemon/">daemon</a></strong> : --children-daemon option</li>
+<li><strong><a href="http://man.devl.cz/man/8/capsh">capsh</a></strong> : --retain-capabilities/--remove-capabilities and --set-capabilities</li>
+<li><s><a href="http://linux.die.net/man/2/unshare">unshare</a> : --unshare option</s> Not implemented -J mode...</li>
+</ul>
+</p>
+
+<h4>Remove ability to start suid-bit things</h4>
+
+<pre><code>root# dived -J -X -- bash
+root# su -l alice
+alice$ ping 127.0.0.1
+ping: icmp open socket: Operation not permitted
+</code></pre>
+
+<h4>Starting ping from user "nobody" with only cap_net_raw</h4>
+
+<pre><code>root# setcap =ei /root/ping
+root# dived -J -u nobody -X -c "= cap_net_raw+ip" -- /root/ping 127.0.0.1</code></pre>
 
 
         <footer>
