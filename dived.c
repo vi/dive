@@ -78,6 +78,7 @@ struct dived_options {
     char* set_capabilities;
     int no_new_privs;
     int just_execute;
+    int lock_securebits;
 } options;
 
 
@@ -239,8 +240,16 @@ int serve_client(int fd, struct dived_options *opts) {
 
 
     #ifndef __MUSL__   
-    if (opts->set_capabilities) {
-        prctl(PR_SET_SECUREBITS, SECBIT_KEEP_CAPS, 0, 0);
+    if (opts->set_capabilities || opts->lock_securebits) {
+        if (!opts->lock_securebits) {
+            prctl(PR_SET_SECUREBITS, SECBIT_KEEP_CAPS, 0, 0);
+        } else {
+            prctl(PR_SET_SECUREBITS, 
+                SECBIT_KEEP_CAPS |
+                SECBIT_NO_SETUID_FIXUP | SECBIT_NO_SETUID_FIXUP_LOCKED |
+                SECBIT_NOROOT | SECBIT_NOROOT_LOCKED
+                , 0, 0);            
+        }
     }
     #endif
 
@@ -563,6 +572,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -c --set-capabilities cap_set_proc this\n"); 
         #endif
         printf("          -X --no-new-privs     set PR_SET_NO_NEW_PRIVS\n");
+        printf("          -L --lock-securebits  set and lock SECBIT_NO_SETUID_FIXUP and SECBIT_NOROOT\n");
         printf("          -a --authenticate     start this program for authentication\n");
         printf("              The program is started using \"system\" after file descriptors are received\n");
         printf("              from client, but before everything else (root, current dir, environment) is received.\n");
@@ -628,6 +638,7 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->remove_capabilities = NULL;
     opts->no_new_privs = 0;
     opts->just_execute = 0;
+    opts->lock_securebits = 0;
     if(!strcmp(argv[1], "-i") || !strcmp(argv[1], "--inetd")) { opts->inetd = 1; }
     if(!strcmp(argv[1], "-J") || !strcmp(argv[1], "--just-execute")) { opts->just_execute = 1; }
 
@@ -722,6 +733,9 @@ int main(int argc, char* argv[], char* envp[]) {
             if(!strcmp(argv[i], "-c") || !strcmp(argv[i], "--set-capabilities")) {
                 opts->set_capabilities = argv[i+1];
                 ++i;
+            }else
+            if(!strcmp(argv[i], "-L") || !strcmp(argv[i], "--lock-securebits")) {
+                opts->lock_securebits = 1;
             }else
             if(!strcmp(argv[i], "--")) {
                 opts->forced_argv = &argv[i+1];
