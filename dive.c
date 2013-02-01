@@ -15,11 +15,14 @@
 #include <signal.h>
 #include <sys/stat.h>
 #include  <fcntl.h>
+#include <sys/select.h>
+#include <sys/signalfd.h>
 
 #include "send_fd.h"
 #include "safer.h"
 
-pid_t theirpid;
+pid_t theirpid;  // dived instance pid
+pid_t executed_pid; // our executed program's pid
 
 /*
 void sigint(int arg) {
@@ -28,7 +31,7 @@ void sigint(int arg) {
 
 #define MAXFD 1024
 
-#define VERSION 800
+#define VERSION 900
 #define VERSION2 "v0.8"
 
 int main(int argc, char* argv[], char* envp[]) {
@@ -199,16 +202,61 @@ int main(int argc, char* argv[], char* envp[]) {
     free(buf2);
 
 
+    
+    /* Receive executed PID */
+    safer_read(fd, (char*)&executed_pid, sizeof(theirpid));
+    
     /* Server is leaving our client socket as "marker" 
      *
      * We will get EOF here when all processes started there exit
      */
+    
+    
+    
+    /* process signals and re-send them (direcly, not using dived)*/
+    sigset_t mask;
+    sigfillset(&mask);
+    int signal_fd = signalfd(-1, &mask, SFD_NONBLOCK);
+    sigprocmask(SIG_BLOCK, &mask, NULL);
+    if (signal_fd != -1) {
+        int maxfd = (signal_fd > fd) ? signal_fd : fd;
+        for(;;) {
+            fd_set rfds;
+            int ret;
+            
+            FD_ZERO(&rfds);
+            FD_SET(signal_fd, &rfds);
+            FD_SET(fd, &rfds);
+            
+            ret = select(maxfd+1, &rfds, NULL, NULL, NULL);
+            
+            if (ret == -1) {
+                if (errno==EINTR || errno==EAGAIN) continue;
+                break;
+            }
+            
+            if(FD_ISSET(fd, &rfds)) {
+                break;
+            }
+            
+            if (FD_ISSET(signal_fd, &rfds)) {
+                struct signalfd_siginfo si;
+                if (read(signal_fd, &si, sizeof si)>0) {
+                    kill(executed_pid, si.ssi_signo);
+                }                
+            }
+        }
+    }
+        
+    /* Read the exitcode */
     int exitcode;
     ret = safer_read(fd, (char*)&exitcode, sizeof(exitcode));
     if (ret!=sizeof(exitcode)) {
         fprintf(stderr, "dive: Something failed with the server\n");
         return 127;
     }
+    
+    
     
     if (exitcode==127) {
         fprintf(stderr, "dive: Probably can't execute command\n");

@@ -30,7 +30,7 @@
 
 #define MAXFD 1024
 
-#define VERSION 800
+#define VERSION 900
 #define VERSION2 "v1.1"
 
 #define CLONE_STACK_SIZE  (1024*16)
@@ -498,6 +498,9 @@ int serve_client(int fd, struct dived_options *opts) {
     for(i=0; i<MAXFD; ++i) {
         if(saved_fdnums[i]) close(i);
     }
+        
+    /* Send executed pid */
+    safer_write(fd, (char*)&pid2, sizeof(pid2));
 
     int status;
     waitpid(pid2, &status, 0);
