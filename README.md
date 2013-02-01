@@ -5,168 +5,56 @@ Also allow users execute programs in other user account or in chroot in controll
 
 Works by sending file descriptors over UNIX socket. 
 
-**Exampe**
-
-    # # Start dived in unshared network namespace
-    # unshare -n  -- dived /var/run/qqq.socket -d
-    # dive /var/run/qqq.socket ip addr
-    1218: lo: <LOOPBACK> mtu 16436 qdisc noop state DOWN 
-        link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
-    # dive /var/run/qqq.socket bash
-    # # Now we are inside that unshare
-    # ip link set lo up
-    # exit
-    exit
-    # # outside unshare again
-    # dive /var/run/qqq.socket bash
-    # ip addr
-    1218: lo: <LOOPBACK,UP,LOWER_UP> mtu 16436 qdisc noqueue state UNKNOWN 
-        link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
-        inet 127.0.0.1/8 scope host lo
-    # # our network configuration persisted
-    
-Use `dived socket --unshare net` instead of `unshare -n dived socket` on kernels around v2.6.32.
-
-**Multi-user example**
-
-Let users start programs with network access disabled.
-
-    # umask 0000
-    # unshare -n -- dived /var/run/qqq2.socket -d
-    
-    $ dive /var/run/qqq2.socket bash
-    $ ping 127.0.0.1
-    connect: Network is unreachable
-    $ id
-    $ uid=1000(vi) gid=1000(vi) groups=1000(vi),20(dialout),21(fax),...
-
-**"Poor man's sudo" example 1**
-
-Grant Alice access to Bob.
-
-    root# dived /var/run/alice2bob -d -C 700 -U alice:alice -u bob
-    
-    alice$ HOME=/home/bob USER=bob dive /var/run/alice2bob bash
-    bob$ id
-    uid=1037(bob) gid=1045(bob) groups=1045(bob),1033(ololo)
-    bob$ exit
-    alice$
-    malice$ dive /var/run/alice2bob bash
-    connect: Permission denied
-    
-    
-**Poor man's suid-bit-less sudo example 2**
-
-Allow certain users execute certain programs (script in some directory) as root. Use client's command line arguments and filehandles, but not environment variables, current directory or controlling tty.
-
-    root# dived  /var/run/suidless_sudo --detach --user root --no-csctty --chmod 777 --no-environment  --no-chdir --no-umask -- /root/scripts/suidless_sudo
-    root# cat /root/scripts/suidless_sudo
-    #!/usr/bin/perl -w
-      use strict;
-      die("No script specified") if $#ARGV == -1;
-      my $script = $ARGV[0];
-      my $user = $ENV{"DIVE_USER"};
-      die ("No user") unless $user;
-      die ("Forbidden") unless $user eq "alice";
-      die ("Bad script name $script") unless ($script =~ /^([a-zA-Z0-9_]{1,64})$/);
-      exec "/root/scripts/allowed_scripts/$1"
-    
-    alice$ dive /var/run/suidless_sudo ../../../bin/bash
-    Bad script name  at /root/scripts/suidless_sudo line 8.
-    alice$ dive /var/run/suidless_sudo reboot
-    Reboot started
-    
-    bob$ dive /var/run/suidless_sudo reboot
-    Forbidden at /root/scripts/suidless_sudo line 7.
-    bob$ DIVE_USER=alice dive /var/run/suidless_sudo reboot
-    Forbidden at /root/scripts/suidless_sudo line 7.
-    
-** Ping without suidbit example **
-
-Allow users access to ping (but not to `ping -f`) without suidbit:
-
-    root# cp /bin/ping /root/ping # loses suidbit
-    root# dived  /var/run/pinger --detach --effective-user root --chmod 777 --no-environment  --no-chdir  -- /root/ping
-    
-    alice$ dive /var/run/pinger 127.0.0.1
-    PING 127.0.0.1 (127.0.0.1) 56(84) bytes of data.
-    64 bytes from 127.0.0.1: icmp_req=1 ttl=64 time=0.163 ms
-    64 bytes from 127.0.0.1: icmp_req=2 ttl=64 time=0.108 ms
-    ^C
-    --- 127.0.0.1 ping statistics ---
-    2 packets transmitted, 2 received, 0% packet loss, time 1002ms
-    rtt min/avg/max/mdev = 0.108/0.135/0.163/0.029 ms
-    dive: Something failed with the server
-    
-    alice$ dive /var/run/pinger -f 127.0.0.1
-    PING 127.0.0.1 (127.0.0.1) 56(84) bytes of data.
-    ping: cannot flood; minimal interval, allowed for user, is 200ms
-
-TODO: Implement specifying the indifidual capabilities.
-    
-    
-**Authentication example**
-
-dived supports starting external programs for authentication. 
-The program is started when file descriptors are already received from client, but
-environtment, controlling terminal (if any), root and current directories, user and
-umask are still original. Nonzero exit code from authentication program rejects the client.
-
-    root# dived @boblogin --detach --user bob --authenticate 'user=bob /root/askpassword' -- bash
-
-    alice$ HOME=/home/bob dive @boblogin
-      bob's Password: 
-    bob$ exit
-    alice$ dive @boblogin
-      bob's Password: 
-      Go away! (('Authentication failure', 7))
-      dive: Something failed with the server
-    alice$ 
-
-
-"@boblogin" is abstract UNIX socket. "askpassword" program is included in source repository (uses python-pam).
-
+<strong>See various usage examples at the [github page](http://vi.github.com/dive/).</strong>
     
 **Usage**
 
-    Usage: dived {socket_path|@abstract_address|-i} [-d] [-D] [-F] [-P] [-S] [-p pidfile] 
-    [-u user] [-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] 
-    [-a "program"] [-- prepended commandline parts]
-              -d --detach           detach
-              -i --inetd            serve once, interpred stdin as client socket
-              -D --children-daemon  call daemon(0,0) in children
-              -F --no-fork          no fork, serve once (debugging)
-              -P --no-setuid        no setuid/setgid/etc
-              -u --user             setuid to this user instead of the client
-              -a --authenticate     start this program for authentication
-                  The program is started using "system" after file descriptors are received
-                  from client, but before everything else (root, current dir, environment) is received.
-                  Nonzero exit code => rejected client.
-              -S --no-setsid        no setsid
-              -T --no-csctty        no ioctl TIOCSCTTY
-              -R --chroot           chroot to this directory 
-                  Note that current directory stays on unchrooted filesystem 
-              -r --client-chroot    Allow arbitrary chroot from client
-              -W --root-to-current  Set server's root directory as current directory
-                                    (for using with '-r' and '-H' simultaneously)
-              -s --unshare          Unshare this (comma-separated list); also detaches
-                                    ipc,net,fs,pid,uts
-              -p --pidfile          save PID to this file
-              -C --chmod            chmod the socket to this mode (like '0777')
-              -U --chown            chown the socket to this user:group
-              -E --no-environment   Don't let client set environment variables
-              -A --no-argv          Don't let client set command line
-              -H --no-chdir         Don't let client set current directory
-              -O --no-fds           Don't let client set file descriptors
-              -M --no-umask         Don't let client set umask
-              --                    prepend this to each command line ('--' is mandatory)
-                  Note that the program beingnocsctty strarted using "--" should be
-                  as secure as suid programs, but it doesn't know
-                  real uid/gid.
+```
+Dive server v1.1 (proto 800) https://github.com/vi/dive/
+Listen UNIX socket and start programs for each connected client, redirecting fds to client.
+Usage: dived {socket_path|@abstract_address|-i|-J} [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-e effective_user] [-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] [-a "program"] [{-B cap_smth1,cap_smth2|-b cap_smth1,cap_smth2}] [-X] [-c 'cap_smth+eip cap_smth2+i'] [-- prepended commandline parts]
+          -d --detach           detach
+          -i --inetd            serve once, interpred stdin as client socket
+          -J --just-execute     don't mess with sockets at all, just execute the program.
+                                Other options does apply.
+          -D --children-daemon  call daemon(0,0) in children
+          -F --no-fork          no fork, serve once (debugging)
+          -P --no-setuid        no setuid/setgid/etc
+          -u --user             setuid to this user instead of the client
+          -e --effective-user   seteuid to this user instead of the client
+          -B --retain-capabilities Remove all capabilities from bounding set
+                                   except of specified ones
+          -b --remove-capabilities Remove capabilities from bounding set
+          -c --set-capabilities cap_set_proc this
+          -X --no-new-privs     set PR_SET_NO_NEW_PRIVS
+          -a --authenticate     start this program for authentication
+              The program is started using "system" after file descriptors are received
+              from client, but before everything else (root, current dir, environment) is received.
+              Nonzero exit code => rejected client.
+          -S --no-setsid        no setsid
+          -T --no-csctty        no ioctl TIOCSCTTY
+          -R --chroot           chroot to this directory 
+              Note that current directory stays on unchrooted filesystem; use -W option to prevent.
+          -r --client-chroot    Allow arbitrary chroot from client
+          -W --root-to-current  Set server's root directory as current directory
+                                (implies -H; useful with -r)
+          -s --unshare          Unshare this (comma-separated list); also detaches
+                                ipc,net,fs,pid,uts
+          -p --pidfile          save PID to this file
+          -C --chmod            chmod the socket to this mode (like '0777')
+          -U --chown            chown the socket to this user:group
+          -E --no-environment   Don't let client set environment variables
+          -A --no-argv          Don't let client set command line
+          -H --no-chdir         Don't let client set current directory
+          -O --no-fds           Don't let client set file descriptors
+          -M --no-umask         Don't let client set umask
+          --                    prepend this to each command line ('--' is mandatory)
+              Note that the program beingnocsctty strarted using "--" should be
+              as secure as suid programs, but it doesn't know
+              real uid/gid.
+```
 
-
-                      
-        Usage: dive socket_path [program arguments]
+    Usage: dive socket_path [program arguments]
     
 **Features**
     
