@@ -17,9 +17,13 @@
 #include <signal.h>
 #include <errno.h>
 #include <dirent.h>
+
+#ifndef __MUSL__   
 #include <sys/capability.h>
-#include <sys/prctl.h>
 #include <linux/securebits.h>
+#endif
+
+#include <sys/prctl.h>
 
 #include "recv_fd.h"
 #include "safer.h"
@@ -234,9 +238,11 @@ int serve_client(int fd, struct dived_options *opts) {
     close(terminal_fd);
 
 
+    #ifndef __MUSL__   
     if (opts->set_capabilities) {
         prctl(PR_SET_SECUREBITS, SECBIT_KEEP_CAPS, 0, 0);
     }
+    #endif
 
     /* Change into the appropriate user*/
     if(!opts->noprivs) {
@@ -277,6 +283,7 @@ int serve_client(int fd, struct dived_options *opts) {
             username = pw->pw_name;
         }
         
+        #ifndef __MUSL__   
         if (opts->remove_capabilities || opts->retain_capabilities) {      
             int also_remove_CAP_SETPCAP = 0;      
             
@@ -344,6 +351,7 @@ int serve_client(int fd, struct dived_options *opts) {
                 }
             }
         }
+        #endif
         
         initgroups(username, targetgid);
         if (!opts->effective_user) {
@@ -355,6 +363,7 @@ int serve_client(int fd, struct dived_options *opts) {
         }
     }
     
+    #ifndef __MUSL__   
     if (opts->set_capabilities) {            
         cap_t c = cap_from_text(opts->set_capabilities);
         if (c==NULL) {
@@ -367,6 +376,7 @@ int serve_client(int fd, struct dived_options *opts) {
         }
         cap_free(c);
     }
+    #endif
     
     if (opts->no_new_privs) {
         #ifndef PR_SET_NO_NEW_PRIVS
@@ -459,7 +469,11 @@ int serve_client(int fd, struct dived_options *opts) {
         }
 
         close(fd);
+        #ifndef __MUSL__
         execvpe(argv[0], argv, envp_);
+        #else
+        execve(argv[0], argv, envp_);
+        #endif
         exit(127);
         
         } else {
@@ -542,10 +556,12 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -P --no-setuid        no setuid/setgid/etc\n");
         printf("          -u --user             setuid to this user instead of the client\n");
         printf("          -e --effective-user   seteuid to this user instead of the client\n");
+        #ifndef __MUSL__       
         printf("          -B --retain-capabilities Remove all capabilities from bounding set\n");
         printf("                                   except of specified ones\n");
         printf("          -b --remove-capabilities Remove capabilities from bounding set\n");
-        printf("          -c --set-capabilities cap_set_proc this\n");
+        printf("          -c --set-capabilities cap_set_proc this\n"); 
+        #endif
         printf("          -X --no-new-privs     set PR_SET_NO_NEW_PRIVS\n");
         printf("          -a --authenticate     start this program for authentication\n");
         printf("              The program is started using \"system\" after file descriptors are received\n");
@@ -735,6 +751,13 @@ int main(int argc, char* argv[], char* envp[]) {
     if (opts->just_execute && opts->unshare_) {
         fprintf(stderr, "--just-execute and --unshare are incompatible");
     }
+    
+    #ifdef __MUSL__       
+    if (opts->set_capabilities || opts->retain_capabilities || opts->remove_capabilities) {
+        fprintf(stderr, "Capabilities are not supported with musl-gcc\n");
+        return 17;
+    }
+    #endif
     
     if(!opts->nodaemon) daemon(1, 0);
     
