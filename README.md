@@ -86,4 +86,4 @@ For less feature-creep version see "nocreep" branch
 * Current directory can be "smuggled" into the chroot or unshare where that part of filesystem is not mounted (can be prevented using -W or -H options)
  
 
- There are pre-built i386 binaries for [dive](http://vi-server.org/pub/dive) and [dived](http://vi-server.org/pub/dived).
+ There are pre-built i386 binaries for [dive](http://vi-server.org/pub/dive) and [dived](http://vi-server.org/pub/dived). There are also [musl-gcc](http://www.musl-libc.org/)-built binaries for [dive](http://vi-server.org/pub/dive_musl) and [dived](http://vi-server.org/pub/dived_musl) (without capabilities support).
