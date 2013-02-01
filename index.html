@@ -23,9 +23,12 @@
         </header>
 
         <section id="downloads" class="clearfix">
+        <div>
           <a href="https://github.com/vi/dive/zipball/master" id="download-zip" class="button"><span>Download .zip</span></a>
           <a href="https://github.com/vi/dive/tarball/master" id="download-tar-gz" class="button"><span>Download .tar.gz</span></a>
           <a href="https://github.com/vi/dive" id="view-on-github" class="button"><span>View on GitHub</span></a>
+        </div>
+        <p>Download pre-built x86 dive and dived <a href="#prebuiltbinaries">here</a></p>
         </section>
 
         <hr>
@@ -183,7 +186,7 @@ alice$
 <li><strong>chroot</strong> : --chroot option</li>
 <li><strong><a href="http://libslack.org/daemon/">daemon</a></strong> : --children-daemon option</li>
 <li><strong><a href="http://man.devl.cz/man/8/capsh">capsh</a></strong> : --retain-capabilities/--remove-capabilities and --set-capabilities</li>
-<li><s><a href="http://linux.die.net/man/2/unshare">unshare</a> : --unshare option</s> Not implemented -J mode...</li>
+<li><s><a href="http://linux.die.net/man/2/unshare">unshare</a> : --unshare option</s> Not implemented in the -J mode...</li>
 </ul>
 </p>
 
@@ -214,6 +217,16 @@ root# /etc/init.d/openbsd-inetd reload
 </code></pre>
 
 <p> and everybody who can acess <code>/var/run/*.dive</code> can shutdown the system (but not cancel the shutdown) or execute any commands from "nobody" user.</p>
+
+<h1> Pre-build binaries </h1>
+<a name="prebuiltbinaries"/>
+<div>
+  <div><a href="http://vi-server.org/pub/dive">Download pre-built x86 dive</a></div>
+  <div><a href="http://vi-server.org/pub/dived">Download pre-built x86 dived</a></div>
+  <div><a href="http://vi-server.org/pub/dive_musl">Download pre-built x86 static dive</a>
+  <div><a href="http://vi-server.org/pub/dived_musl">Download pre-built x86 static dived</a> (no capabilities support)
+  <div><a href="http://vi-server.org/pub/dive_1.1.0-1_i386.deb">Download pre-built x86 Debian package</a></div>
+</div>
 
         <footer>
           <p>See the feature list, usage and notes are in the <a href="https://github.com/vi/dive#readme">readme file</a>.</p>
