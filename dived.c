@@ -585,9 +585,9 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -O --no-fds           Don't let client set file descriptors\n");
         printf("          -M --no-umask         Don't let client set umask\n");
         printf("          --                    prepend this to each command line ('--' is mandatory)\n");
-        printf("              Note that the program beingnocsctty strarted using \"--\" should be\n");
+        printf("              Note that the program being started using \"--\" should be\n");
         printf("              as secure as suid programs, but it doesn't know\n");
-        printf("              real uid/gid.\n");
+        printf("              real uid/gid (unless -e options is used)\n");
         return 4;
     }
 
@@ -745,11 +745,13 @@ int main(int argc, char* argv[], char* envp[]) {
     }
     
     if (opts->just_execute && opts->inetd) {
-        fprintf(stderr, "--just-execute and --inetd are incompatible");
+        fprintf(stderr, "--just-execute and --inetd are incompatible\n");
+        return 15;
     }
     
     if (opts->just_execute && opts->unshare_) {
-        fprintf(stderr, "--just-execute and --unshare are incompatible");
+        fprintf(stderr, "--just-execute and --unshare are incompatible\n");
+        return 15;
     }
     
     #ifdef __MUSL__       
@@ -758,6 +760,11 @@ int main(int argc, char* argv[], char* envp[]) {
         return 17;
     }
     #endif
+    
+    if (opts->remove_capabilities || opts->retain_capabilities) {
+        fprintf(stderr, "--remove-capabilities and --retain-capabilities are incompatible\n");
+        return 18;
+    }
     
     if(!opts->nodaemon) daemon(1, 0);
     

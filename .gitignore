@@ -1,3 +1,6 @@
 *.o
 dived
 dive
+dive_musl
+dived_musl
+pages
