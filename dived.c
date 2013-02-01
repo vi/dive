@@ -331,7 +331,11 @@ int serve_client(int fd, struct dived_options *opts) {
         }
 
         close(fd);
+        #ifndef __MUSL__
         execvpe(argv[0], argv, envp_);
+        #else
+        execve(argv[0], argv, envp_);
+        #endif
         exit(127);
     }
 

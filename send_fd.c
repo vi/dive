@@ -1,6 +1,9 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
+#ifndef NULL
+#define NULL ((void *) 0)
+#endif
 
  int send_fd(int socket, int fd_to_send)
  {

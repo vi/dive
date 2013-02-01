@@ -1,6 +1,10 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
+#ifndef NULL
+#define NULL ((void *) 0)
+#endif
+
 int recv_fd(int socket)
  {
   int sent_fd;
