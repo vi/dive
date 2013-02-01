@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <link href='https://fonts.googleapis.com/css?family=Chivo:900' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="stylesheets/pygment_trac.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print" />
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <title>Dive by vi</title>
+  </head>
+
+  <body>
+    <div id="container">
+      <div class="inner">
+
+        <header>
+          <h1>Dive</h1>
+          <h2>Start programs in unshare/lxc namespaces easily and more. Like tiny &quot;sshd&quot; listening UNIX socket for command lines with file descriptors.</h2>
+        </header>
+
+        <section id="downloads" class="clearfix">
+          <a href="https://github.com/vi/dive/zipball/master" id="download-zip" class="button"><span>Download .zip</span></a>
+          <a href="https://github.com/vi/dive/tarball/master" id="download-tar-gz" class="button"><span>Download .tar.gz</span></a>
+          <a href="https://github.com/vi/dive" id="view-on-github" class="button"><span>View on GitHub</span></a>
+        </section>
+
+        <hr>
+
+        <section id="main_content">
+          <p>Start processes in other network/mount/whatever namespace, as created by <code>unshare</code> or <code>lxc-start</code> 
+(as long as there is a shared filesytem between the host and container and you use recent enough Linux kernel). 
+Also allow users execute programs in other user account or in chroot in controlled way 
+(like sudo, but without setuid-bit in filesystem).</p>
+
+<p>Works by sending file descriptors over UNIX socket. </p>
+
+<p><strong>Exampe</strong></p>
+
+<pre><code># # Start dived in unshared network namespace
+# unshare -n  -- dived /var/run/qqq.socket -d
+# dive /var/run/qqq.socket ip addr
+1218: lo: &lt;LOOPBACK&gt; mtu 16436 qdisc noop state DOWN 
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+# dive /var/run/qqq.socket bash
+# # Now we are inside that unshare
+# ip link set lo up
+# exit
+exit
+# # outside unshare again
+# dive /var/run/qqq.socket bash
+# ip addr
+1218: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 16436 qdisc noqueue state UNKNOWN 
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+# # our network configuration persisted
+</code></pre>
+
+<p>Use <code>dived socket --unshare net</code> instead of <code>unshare -n dived socket</code> on kernels around v2.6.32.</p>
+
+<p><strong>Multi-user example</strong></p>
+
+<p>Let users start programs with network access disabled.</p>
+
+<pre><code># umask 0000
+# unshare -n -- dived /var/run/qqq2.socket -d
+
+$ dive /var/run/qqq2.socket bash
+$ ping 127.0.0.1
+connect: Network is unreachable
+$ id
+$ uid=1000(vi) gid=1000(vi) groups=1000(vi),20(dialout),21(fax),...
+</code></pre>
+
+<p><strong>"Poor man's sudo" example 1</strong></p>
+
+<p>Grant Alice access to Bob.</p>
+
+<pre><code>root# dived /var/run/alice2bob -d -C 700 -U alice:alice -u bob
+
+alice$ HOME=/home/bob USER=bob dive /var/run/alice2bob bash
+bob$ id
+uid=1037(bob) gid=1045(bob) groups=1045(bob),1033(ololo)
+bob$ exit
+alice$
+malice$ dive /var/run/alice2bob bash
+connect: Permission denied
+</code></pre>
+
+<p><strong>Poor man's suid-bit-less sudo example 2</strong></p>
+
+<p>Allow certain users execute certain programs (script in some directory) as root. Use client's command line arguments and filehandles, but not environment variables, current directory or controlling tty.</p>
+
+<pre><code>root# dived  /var/run/suidless_sudo --detach --user root --no-csctty --chmod 777 --no-environment  --no-chdir --no-umask -- /root/scripts/suidless_sudo
+root# cat /root/scripts/suidless_sudo
+#!/usr/bin/perl -w
+  use strict;
+  die("No script specified") if $#ARGV == -1;
+  my $script = $ARGV[0];
+  my $user = $ENV{"DIVE_USER"};
+  die ("No user") unless $user;
+  die ("Forbidden") unless $user eq "alice";
+  die ("Bad script name $script") unless ($script =~ /^([a-zA-Z0-9_]{1,64})$/);
+  exec "/root/scripts/allowed_scripts/$1"
+
+alice$ dive /var/run/suidless_sudo ../../../bin/bash
+Bad script name  at /root/scripts/suidless_sudo line 8.
+alice$ dive /var/run/suidless_sudo reboot
+Reboot started
+
+bob$ dive /var/run/suidless_sudo reboot
+Forbidden at /root/scripts/suidless_sudo line 7.
+bob$ DIVE_USER=alice dive /var/run/suidless_sudo reboot
+Forbidden at /root/scripts/suidless_sudo line 7.
+</code></pre>
+
+<p>** Ping without suidbit example **</p>
+
+<p>Allow users access to ping (but not to <code>ping -f</code>) without suidbit:</p>
+
+<pre><code>root# cp /bin/ping /root/ping # loses suidbit
+root# dived  /var/run/pinger --detach --effective-user root --chmod 777 --no-environment  --no-chdir  -- /root/ping
+
+alice$ dive /var/run/pinger 127.0.0.1
+PING 127.0.0.1 (127.0.0.1) 56(84) bytes of data.
+64 bytes from 127.0.0.1: icmp_req=1 ttl=64 time=0.163 ms
+64 bytes from 127.0.0.1: icmp_req=2 ttl=64 time=0.108 ms
+^C
+--- 127.0.0.1 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1002ms
+rtt min/avg/max/mdev = 0.108/0.135/0.163/0.029 ms
+dive: Something failed with the server
+
+alice$ dive /var/run/pinger -f 127.0.0.1
+PING 127.0.0.1 (127.0.0.1) 56(84) bytes of data.
+ping: cannot flood; minimal interval, allowed for user, is 200ms
+</code></pre>
+
+<p>TODO: Implement specifying the indifidual capabilities.</p>
+
+<p><strong>Authentication example</strong></p>
+
+<p>dived supports starting external programs for authentication. 
+The program is started when file descriptors are already received from client, but
+environtment, controlling terminal (if any), root and current directories, user and
+umask are still original. Nonzero exit code from authentication program rejects the client.</p>
+
+<pre><code>root# dived @boblogin --detach --user bob --authenticate 'user=bob /root/askpassword' -- bash
+
+alice$ HOME=/home/bob dive @boblogin
+  bob's Password: 
+bob$ exit
+alice$ dive @boblogin
+  bob's Password: 
+  Go away! (('Authentication failure', 7))
+  dive: Something failed with the server
+alice$ 
+</code></pre>
+
+<p>"@boblogin" is abstract UNIX socket. "askpassword" program is included in source repository (uses python-pam).</p>
+
+<p><strong>Usage</strong></p>
+
+<pre><code>Usage: dived {socket_path|@abstract_address|-i} [-d] [-D] [-F] [-P] [-S] [-p pidfile] 
+[-u user] [-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] 
+[-a "program"] [-- prepended commandline parts]
+          -d --detach           detach
+          -i --inetd            serve once, interpred stdin as client socket
+          -D --children-daemon  call daemon(0,0) in children
+          -F --no-fork          no fork, serve once (debugging)
+          -P --no-setuid        no setuid/setgid/etc
+          -u --user             setuid to this user instead of the client
+          -a --authenticate     start this program for authentication
+              The program is started using "system" after file descriptors are received
+              from client, but before everything else (root, current dir, environment) is received.
+              Nonzero exit code =&gt; rejected client.
+          -S --no-setsid        no setsid
+          -T --no-csctty        no ioctl TIOCSCTTY
+          -R --chroot           chroot to this directory 
+              Note that current directory stays on unchrooted filesystem 
+          -r --client-chroot    Allow arbitrary chroot from client
+          -W --root-to-current  Set server's root directory as current directory
+                                (for using with '-r' and '-H' simultaneously)
+          -s --unshare          Unshare this (comma-separated list); also detaches
+                                ipc,net,fs,pid,uts
+          -p --pidfile          save PID to this file
+          -C --chmod            chmod the socket to this mode (like '0777')
+          -U --chown            chown the socket to this user:group
+          -E --no-environment   Don't let client set environment variables
+          -A --no-argv          Don't let client set command line
+          -H --no-chdir         Don't let client set current directory
+          -O --no-fds           Don't let client set file descriptors
+          -M --no-umask         Don't let client set umask
+          --                    prepend this to each command line ('--' is mandatory)
+              Note that the program beingnocsctty strarted using "--" should be
+              as secure as suid programs, but it doesn't know
+              real uid/gid.
+
+
+
+    Usage: dive socket_path [program arguments]
+</code></pre>
+
+<p><strong>Features</strong></p>
+
+<ul>
+<li>Absence of any filesystem permission tricks (no "chmod +s" required)</li>
+<li>Secure preserving of user id and groups (requires root access)</li>
+<li>Preserving of current directory</li>
+<li>Preserving of all file descriptors (not only stdin/stdout/stderr)</li>
+<li>Setting session ID and controlling terminal, for clean bash without "no job control" (requires root access)</li>
+<li>Preserving of environment variables</li>
+<li>Preserving of exit code</li>
+<li>Selective disabling of "preserving" parts above </li>
+<li>Chroot / CLONE_NEW... / forced command line</li>
+<li>Setting of DIVE_USER and other variables according to client credentials</li>
+<li>Allowing clients to set it's own root directory ("-r" option)</li>
+<li>Setting of PR_SET_NO_NEW_PRIVS to turn off filesystem-based permission elevations</li>
+<li>Setting Linux capabilities</li>
+<li>"Just execute" feature to use capabilities, chroot, PR_SET_NO_NEW_PRIVS
+setup; "authenticate", pidfile and so on without any "remote startup" thought
+socket at all</li>
+</ul><p>For less feature-creep version see "nocreep" branch</p>
+
+<p><strong>Notes</strong></p>
+
+<ul>
+<li>For clean interactive shell access dived need to be started as root (for setsid/TIOCSCTTY)
+
+<ul>
+<li>Without TIOCSCTTY, use <code>socat -,raw,echo=0 exec:bash,pty,setsid,stderr</code> (there's hind in <code>dive</code>'s usage message) as the program to start to have nicer bash</li>
+<li>With TIOCSCTTY it steams controlling terminal from the previous process (leaving it "homeless"), so "exec dive socket bash" is preferred (or workaround with <a href="https://github.com/nelhage/reptyr">reptyr</a> &gt;= v0.4 is needed).</li>
+</ul>
+</li>
+<li>
+<p>Current directory can be "smuggled" into the chroot or unshare where that part of filesystem is not mounted (can be prevented using -W or -H options)</p>
+
+<p>There are pre-built i386 binaries for <a href="http://vi-server.org/pub/dive">dive</a> and <a href="http://vi-server.org/pub/dived">dived</a>.</p>
+</li>
+</ul>
+        </section>
+
+        <footer>
+          Dive is maintained by <a href="https://github.com/vi">vi</a><br>
+          This page was generated by <a href="http://pages.github.com">GitHub Pages</a>. Tactile theme by <a href="http://twitter.com/jasonlong">Jason Long</a>.
+        </footer>
+
+        
+      </div>
+    </div>
+  </body>
+</html>
