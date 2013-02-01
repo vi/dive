@@ -31,7 +31,7 @@ void sigint(int arg) {
 
 #define MAXFD 1024
 
-#define VERSION 900
+#define VERSION 901
 #define VERSION2 "v0.8"
 
 int main(int argc, char* argv[], char* envp[]) {
@@ -218,6 +218,18 @@ int main(int argc, char* argv[], char* envp[]) {
     sigfillset(&mask);
     int signal_fd = signalfd(-1, &mask, SFD_NONBLOCK);
     sigprocmask(SIG_BLOCK, &mask, NULL);
+    
+    int remote_signal_processing;
+    ret = safer_read(fd, (char*)&remote_signal_processing, sizeof(remote_signal_processing));
+    
+    int sv[2];
+    if (remote_signal_processing) {
+        socketpair(AF_UNIX, SOCK_DGRAM, 0, sv);
+        send_fd(fd, sv[0]);
+    } else {
+        send_fd(fd, -1);
+    }
+    
     if (signal_fd != -1) {
         int maxfd = (signal_fd > fd) ? signal_fd : fd;
         for(;;) {
@@ -242,7 +254,11 @@ int main(int argc, char* argv[], char* envp[]) {
             if (FD_ISSET(signal_fd, &rfds)) {
                 struct signalfd_siginfo si;
                 if (read(signal_fd, &si, sizeof si)>0) {
-                    kill(executed_pid, si.ssi_signo);
+                    if (!remote_signal_processing) {
+                        kill(executed_pid, si.ssi_signo);
+                    } else {
+                        send(sv[1], &si, sizeof si, 0);
+                    }
                 }                
             }
         }

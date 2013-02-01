@@ -17,6 +17,9 @@
 #include <signal.h>
 #include <errno.h>
 #include <dirent.h>
+#include <fcntl.h>
+#include <sys/select.h>
+#include <sys/signalfd.h>
 
 #ifndef __MUSL__   
 #include <sys/capability.h>
@@ -30,7 +33,7 @@
 
 #define MAXFD 1024
 
-#define VERSION 900
+#define VERSION 901
 #define VERSION2 "v1.1"
 
 #define CLONE_STACK_SIZE  (1024*16)
@@ -79,6 +82,7 @@ struct dived_options {
     int no_new_privs;
     int just_execute;
     int lock_securebits;
+    int signal_processing;
 } options;
 
 
@@ -400,12 +404,14 @@ int serve_client(int fd, struct dived_options *opts) {
 
     /* Not caring much about security since that point */
 
+    int initialisation_finished_event[2];
+    pipe2(initialisation_finished_event, O_CLOEXEC);
 
     int pid2 = 0;
     if (!opts->just_execute) {
         pid2 = fork();
     }
-
+    
     if (!pid2) {
         if (!opts->just_execute) {
         
@@ -478,6 +484,9 @@ int serve_client(int fd, struct dived_options *opts) {
         }
 
         close(fd);
+        
+        close (initialisation_finished_event[1]);
+        
         #ifndef __MUSL__
         execvpe(argv[0], argv, envp_);
         #else
@@ -498,12 +507,62 @@ int serve_client(int fd, struct dived_options *opts) {
     for(i=0; i<MAXFD; ++i) {
         if(saved_fdnums[i]) close(i);
     }
+    
+    close (initialisation_finished_event[1]);
+    read(initialisation_finished_event[0], &initialisation_finished_event[1], 1); // will not complete
+    close(initialisation_finished_event[0]);
         
     /* Send executed pid */
     safer_write(fd, (char*)&pid2, sizeof(pid2));
-
+    
+    safer_write(fd, (char*)&opts->signal_processing, sizeof(opts->signal_processing));
+    
+    int dive_signal_fd = recv_fd(fd);
+    
     int status;
-    waitpid(pid2, &status, 0);
+    if (opts->signal_processing) {
+        fcntl(dive_signal_fd, F_SETFL, O_NONBLOCK);
+        
+        sigset_t mask;
+        sigemptyset(&mask);
+        sigaddset(&mask, SIGCHLD);
+        int signal_fd = signalfd(-1, &mask, SFD_NONBLOCK);
+        
+        int maxfd = (signal_fd > dive_signal_fd) ? signal_fd  : dive_signal_fd;
+        
+        for(;;) {
+            fd_set rfds;
+            int ret;
+            
+            FD_ZERO(&rfds);
+            FD_SET(signal_fd, &rfds);
+            FD_SET(dive_signal_fd, &rfds);
+            
+            ret = select(maxfd+1, &rfds, NULL, NULL, NULL);
+            
+            if (ret == -1) {
+                if (errno==EINTR || errno==EAGAIN) continue;
+                break;
+            }
+            
+            if (FD_ISSET(signal_fd, &rfds)) {
+                ret = waitpid(pid2, &status, WNOHANG);
+                if (ret!=0) {
+                    break;
+                }
+            }
+            
+            if (FD_ISSET(dive_signal_fd, &rfds)) {
+                struct signalfd_siginfo si;
+                if (read(dive_signal_fd, &si, sizeof si)>0) {
+                    kill(pid2, si.ssi_signo);
+                }                
+            }
+        }            
+    } else {
+        close(dive_signal_fd);
+        waitpid(pid2, &status, 0);
+    }
 
     int exitcode = WEXITSTATUS(status);
     safer_write(fd, (char*)&exitcode, sizeof(exitcode));
@@ -597,6 +656,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -H --no-chdir         Don't let client set current directory\n");
         printf("          -O --no-fds           Don't let client set file descriptors\n");
         printf("          -M --no-umask         Don't let client set umask\n");
+        printf("          -n --signals          Transfer all signals from dive\n");
         printf("          --                    prepend this to each command line ('--' is mandatory)\n");
         printf("              Note that the program being started using \"--\" should be\n");
         printf("              as secure as suid programs, but it doesn't know\n");
@@ -739,6 +799,9 @@ int main(int argc, char* argv[], char* envp[]) {
             }else
             if(!strcmp(argv[i], "-L") || !strcmp(argv[i], "--lock-securebits")) {
                 opts->lock_securebits = 1;
+            }else
+            if(!strcmp(argv[i], "-n") || !strcmp(argv[i], "--signals")) {
+                opts->signal_processing = 1;
             }else
             if(!strcmp(argv[i], "--")) {
                 opts->forced_argv = &argv[i+1];
