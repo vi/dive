@@ -841,7 +841,7 @@ int main(int argc, char* argv[], char* envp[]) {
     }
     #endif
     
-    if (opts->remove_capabilities || opts->retain_capabilities) {
+    if (opts->remove_capabilities && opts->retain_capabilities) {
         fprintf(stderr, "--remove-capabilities and --retain-capabilities are incompatible\n");
         return 18;
     }
