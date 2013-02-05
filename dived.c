@@ -322,7 +322,7 @@ int serve_client(int fd, struct dived_options *opts) {
             } else {
                 // retain capabilities
                 
-                #define MAXCAPS 100
+                #define MAXCAPS 256
                 
                 unsigned char retain_set[MAXCAPS] = {0};
                 
@@ -341,7 +341,7 @@ int serve_client(int fd, struct dived_options *opts) {
                 
                 cap_value_t i;
                 
-                for(i=0; i<100; ++i) {
+                for(i=0; i<MAXCAPS; ++i) {
                     if(!retain_set[i]) {
                         if(i!=CAP_SETPCAP) {
                             if(prctl(PR_CAPBSET_DROP, i, 0, 0, 0)==-1) {   
@@ -652,7 +652,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -C --chmod            chmod the socket to this mode (like '0777')\n");
         printf("          -U --chown            chown the socket to this user:group\n");
         printf("          -E --no-environment   Don't let client set environment variables\n");
-        printf("          -A --no-argv          Don't let client set command line\n");
+        printf("          -A --no-argv          Don't let client set [part of] command line\n");
         printf("          -H --no-chdir         Don't let client set current directory\n");
         printf("          -O --no-fds           Don't let client set file descriptors\n");
         printf("          -M --no-umask         Don't let client set umask\n");
