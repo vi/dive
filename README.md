@@ -5,7 +5,7 @@ Also allow users execute programs in other user account or in chroot in controll
 
 Works by sending file descriptors over UNIX socket. 
 
-<strong>See various usage examples at the [github page](http://vi.github.com/dive/).</strong>
+<strong>See various usage examples and pre-built dive[d] versions at the [github page](http://vi.github.com/dive/).</strong>
     
 **Usage**
 
@@ -86,4 +86,4 @@ For less feature-creep version see "nocreep" branch
 * Current directory can be "smuggled" into the chroot or unshare where that part of filesystem is not mounted (can be prevented using -W or -H options)
  
 
- There are pre-built i386 binaries for [dive](http://vi-server.org/pub/dive) and [dived](http://vi-server.org/pub/dived). There are also [musl-gcc](http://www.musl-libc.org/)-built binaries for [dive](http://vi-server.org/pub/dive_musl) and [dived](http://vi-server.org/pub/dived_musl) (without capabilities support).
+ There are pre-built i386 binaries for [dive](http://vi-server.org/pub/dive) and [dived](http://vi-server.org/pub/dived). There are also [musl-gcc](http://www.musl-libc.org/)-built binaries for [dive](http://vi-server.org/pub/dive_musl) and [dived](http://vi-server.org/pub/dived_musl) (without capabilities support). There are static uClibc ARMel binaries: [dive](http://vi-server.org/pub/dive_armel), [dived](http://vi-server.org/pub/dived_armel) (also without libcap).
