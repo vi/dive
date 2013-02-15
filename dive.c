@@ -268,7 +268,7 @@ int main(int argc, char* argv[], char* envp[]) {
     int exitcode;
     ret = safer_read(fd, (char*)&exitcode, sizeof(exitcode));
     if (ret!=sizeof(exitcode)) {
-        fprintf(stderr, "dive: Something failed with the server\n");
+        fprintf(stderr, "dive: Something failed with the server ret=%d\n", ret);
         return 127;
     }
     
