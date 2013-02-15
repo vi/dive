@@ -7,6 +7,9 @@
 
  int send_fd(int socket, int fd_to_send)
  {
+  if(fd_to_send==-1) {
+    return send(socket, "X", 1, 0);
+  }
   struct msghdr socket_message;
   struct iovec io_vector[1];
   struct cmsghdr *control_message = NULL;
