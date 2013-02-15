@@ -538,6 +538,11 @@ int serve_client(int fd, struct dived_options *opts) {
             FD_SET(signal_fd, &rfds);
             FD_SET(dive_signal_fd, &rfds);
             
+	    ret = waitpid(pid2, &status, WNOHANG);
+	    if (ret!=0) {
+	        break;
+	    }
+
             ret = select(maxfd+1, &rfds, NULL, NULL, NULL);
             
             if (ret == -1) {
@@ -545,12 +550,6 @@ int serve_client(int fd, struct dived_options *opts) {
                 break;
             }
             
-            if (FD_ISSET(signal_fd, &rfds)) {
-                ret = waitpid(pid2, &status, WNOHANG);
-                if (ret!=0) {
-                    break;
-                }
-            }
             
             if (FD_ISSET(dive_signal_fd, &rfds)) {
                 struct signalfd_siginfo si;
