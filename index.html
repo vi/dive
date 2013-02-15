@@ -193,7 +193,7 @@ alice$
 
 <h4>Remove ability to start suid-bit things</h4>
 
-<pre><code>root# dived -J -X -- bash
+<pre><code>root# dived -J -S -T -X -- bash
 root# su -l alice
 alice$ ping 127.0.0.1
 ping: icmp open socket: Operation not permitted
@@ -202,7 +202,7 @@ ping: icmp open socket: Operation not permitted
 <h4>Starting ping from user "nobody" with only cap_net_raw</h4>
 
 <pre><code>root# setcap =ei /root/ping
-root# dived -J -u nobody -X -c "= cap_net_raw+ip" -- /root/ping 127.0.0.1</code></pre>
+root# dived -J -S -T -u nobody -X -c "= cap_net_raw+ip" -- /root/ping 127.0.0.1</code></pre>
 
 
 
