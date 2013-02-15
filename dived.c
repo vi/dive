@@ -21,7 +21,7 @@
 #include <sys/select.h>
 #include <sys/signalfd.h>
 
-#ifndef __MUSL__   
+#ifndef NO_CAPABILITIES   
 #include <sys/capability.h>
 #include <linux/securebits.h>
 #endif
@@ -243,7 +243,7 @@ int serve_client(int fd, struct dived_options *opts) {
     close(terminal_fd);
 
 
-    #ifndef __MUSL__   
+    #ifndef NO_CAPABILITIES   
     if (opts->set_capabilities || opts->lock_securebits) {
         if (!opts->lock_securebits) {
             prctl(PR_SET_SECUREBITS, SECBIT_KEEP_CAPS, 0, 0);
@@ -296,7 +296,7 @@ int serve_client(int fd, struct dived_options *opts) {
             username = pw->pw_name;
         }
         
-        #ifndef __MUSL__   
+        #ifndef NO_CAPABILITIES
         if (opts->remove_capabilities || opts->retain_capabilities) {      
             int also_remove_CAP_SETPCAP = 0;      
             
@@ -376,7 +376,7 @@ int serve_client(int fd, struct dived_options *opts) {
         }
     }
     
-    #ifndef __MUSL__   
+    #ifndef NO_CAPABILITIES
     if (opts->set_capabilities) {            
         cap_t c = cap_from_text(opts->set_capabilities);
         if (c==NULL) {
@@ -487,7 +487,7 @@ int serve_client(int fd, struct dived_options *opts) {
         
         close (initialisation_finished_event[1]);
         
-        #ifndef __MUSL__
+        #ifndef NO_EXECVPE
         execvpe(argv[0], argv, envp_);
         #else
         execve(argv[0], argv, envp_);

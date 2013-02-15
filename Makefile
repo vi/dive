@@ -17,5 +17,5 @@ deb: dived dive
 	
 
 musl: recv_fd.h recv_fd.c dived.c safer.c
-	musl-gcc -D__MUSL__ -Wall recv_fd.c dived.c safer.c -o dived_musl
-	musl-gcc -D__MUSL__ -Wall send_fd.c dive.c safer.c -o dive_musl
+	musl-gcc -DNO_CAPABILITIES -DNO_EXECVPE -Wall recv_fd.c dived.c safer.c -o dived_musl
+	musl-gcc                                -Wall send_fd.c dive.c safer.c -o dive_musl
