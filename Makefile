@@ -1,10 +1,10 @@
 all: dived dive
 	
 dived: recv_fd.h recv_fd.c dived.c safer.o
-	${CC} -Wall -g -lcap recv_fd.c dived.c safer.o -o dived
+	${CC} ${CFLAGS} -Wall -g -lcap recv_fd.c dived.c safer.o -o dived
 
 dive: send_fd.h send_fd.c dive.c safer.o
-	${CC} -Wall -g send_fd.c dive.c safer.o -o dive
+	${CC} ${CFLAGS} -Wall -g send_fd.c dive.c safer.o -o dive
 
 prefix=/usr/local
 
@@ -17,5 +17,8 @@ deb: dived dive
 	
 
 musl: recv_fd.h recv_fd.c dived.c safer.c
-	musl-gcc -DNO_CAPABILITIES -DNO_EXECVPE -Wall recv_fd.c dived.c safer.c -o dived_musl
-	musl-gcc                                -Wall send_fd.c dive.c safer.c -o dive_musl
+	musl-gcc ${CFLAGS} -DNO_CAPABILITIES -DNO_EXECVPE -Wall recv_fd.c dived.c safer.c -o dived_musl
+	musl-gcc ${CFLAGS}                                -Wall send_fd.c dive.c safer.c -o dive_musl
+
+test: dived dive
+	bash tests.sh
