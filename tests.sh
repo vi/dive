@@ -2,6 +2,8 @@
 
 STATUS=0
 
+unset V
+unset E
 true ${UID:="`id -u`"}
 
 function t() {
@@ -10,13 +12,22 @@ function t() {
     VAL=`"$@" < /dev/null 2> /dev/null`
     C=$?
     if [ "$C" != "$E" ]; then
-        echo "FAIL code=$C"
-        STATUS=1
+        if [ -z "$MF" ]; then # "May fail"
+            echo "FAIL code=$C"
+            STATUS=1
+        else
+            echo "fail soft; code=$C"
+        fi
         return 1
     fi
     
     if [[ "$V" != "nocheck" && "$VAL" != "$V" ]]; then
-        echo "FAIL val=$VAL"
+        if [ -z "$MF" ]; then
+            echo "FAIL val=$VAL"
+            STATUS=1
+        else
+            echo "fail soft; val=$VAL"
+        fi
         STATUS=1
         return 1
     fi
@@ -159,6 +170,13 @@ prepare_dived --signals
 E=0 V=`/bin/ls -1 /proc/self/fd/` t ./dive test_dived    /bin/ls -1 /proc/self/fd/
 
 
+announce    dived -X option supported
+E=0 MF=1 V='' t ./dived --just-execute --no-new-privs -- /bin/true
 
+announce    ping works
+E=0 MF=1 V='nocheck' t /bin/ping -c 1 127.0.0.1
+
+announce    ping fails when from dived -X
+E=2 MF=1 V='nocheck' t ./dived --just-execute --no-new-privs -- /bin/ping -c 1 127.0.0.1
 
 exit $STATUS 
