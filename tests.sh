@@ -115,11 +115,11 @@ E=137 V="" t ./dive test_dived /bin/sh -c '/bin/kill -9 $DIVE_PID'
 
 announce    High fd redirection
 prepare_dived
-E=0 V="qwerty" t ./dive test_dived /bin/sh -c 'cat <&100' 100<<< "qwerty"
+E=0 V="qwerty" t ./dive test_dived /bin/bash -c 'cat <&100' 100<<< "qwerty"
 
 announce    dived -O option
 prepare_dived --no-fds
-E=1 V=""       t ./dive test_dived /bin/sh -c 'cat <&100' 100<<< "qwerty"
+E=1 V=""       t ./dive test_dived /bin/bash -c 'cat <&100' 100<<< "qwerty"
 
 announce    Current directory preservation
 prepare_dived
