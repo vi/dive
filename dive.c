@@ -97,6 +97,12 @@ int main(int argc, char* argv[], char* envp[]) {
         return 2;
     }
     
+    /* Open signal FD */
+    sigset_t mask;
+    sigfillset(&mask);
+    int signal_fd = signalfd(-1, &mask, SFD_NONBLOCK);
+    sigprocmask(SIG_BLOCK, &mask, NULL);
+    
     
     /* Receive version */
     safer_read(fd, (char*)&version, sizeof(version));
@@ -131,7 +137,7 @@ int main(int argc, char* argv[], char* envp[]) {
     for(i=0; i<MAXFD; ++i) {
         struct stat st;
         ret = fstat(i, &st);
-        if(ret!=-1 && i!=fd) {
+        if(ret!=-1 && i!=fd && i!=signal_fd) {
             safer_write(fd, (char*)&i, sizeof(i));
             send_fd(fd, i);
             if (i!=2) {
@@ -139,7 +145,7 @@ int main(int argc, char* argv[], char* envp[]) {
             }
         }
     }
-
+    
     i=-1;
     safer_write(fd, (char*)&i, sizeof(i));
 
@@ -211,13 +217,7 @@ int main(int argc, char* argv[], char* envp[]) {
      * We will get EOF here when all processes started there exit
      */
     
-    
-    
-    /* process signals and re-send them (direcly, not using dived)*/
-    sigset_t mask;
-    sigfillset(&mask);
-    int signal_fd = signalfd(-1, &mask, SFD_NONBLOCK);
-    sigprocmask(SIG_BLOCK, &mask, NULL);
+    /* process signals and re-send them (maybe direcly, maybe with dived's assistance)*/
     
     int remote_signal_processing;
     ret = safer_read(fd, (char*)&remote_signal_processing, sizeof(remote_signal_processing));
