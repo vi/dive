@@ -179,4 +179,14 @@ E=0 MF=1 V='nocheck' t /bin/ping -c 1 127.0.0.1
 announce    ping fails when from dived -X
 E=2 MF=1 V='nocheck' t ./dived --just-execute --no-new-privs -- /bin/ping -c 1 127.0.0.1
 
+
+announce    signal delivery without --signals
+prepare_dived
+E=0 V='qqq' t ./dive test_dived /bin/bash -c 'trap "echo qqq" USR1; kill -USR1 $DIVE_PID; sleep 0.2'
+
+
+announce    signal delivery with --signals
+prepare_dived --signals
+E=0 V='qqq' t ./dive test_dived /bin/bash -c 'trap "echo qqq" USR1; kill -USR1 $DIVE_PID; sleep 0.2'
+
 exit $STATUS 
