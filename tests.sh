@@ -5,24 +5,28 @@ STATUS=0
 true ${UID:="`id -u`"}
 
 function t() {
+    # call the specified argv, capture output and exit code, compare to $V and $E respectively
+    
     VAL=`"$@" < /dev/null 2> /dev/null`
     C=$?
     if [ "$C" != "$E" ]; then
         echo "FAIL code=$C"
         STATUS=1
-        exit 1
+        return 1
     fi
     
     if [[ "$V" != "nocheck" && "$VAL" != "$V" ]]; then
         echo "FAIL val=$VAL"
         STATUS=1
-        exit 1
+        return 1
     fi
     
     echo " OK "
 }
 
 function pt() {
+    # Privileged test
+
     if [ "$UID" != "0" ]; then
         echo "REQUIRES ROOT"
         return 0
@@ -67,8 +71,18 @@ announce    dive and dived echo
 prepare_dived
 E=0 V='qqq' t ./dive test_dived /bin/echo qqq
 
+
+announce    dive and dived echo '(dived -n)'
+prepare_dived --signals
+E=0 V='qqq' t ./dive test_dived /bin/echo qqq
+
 announce    dive and dived return code
 prepare_dived
+E=44 V='' t ./dive test_dived /bin/sh -c "exit 44"
+
+
+announce    dive and dived return code '(dived -n)'
+prepare_dived --signals
 E=44 V='' t ./dive test_dived /bin/sh -c "exit 44"
 
 announce    Preserve environment
@@ -136,7 +150,13 @@ prepare_dived --no-umask
 UMASK=`umask`
 (umask 0354; E=0 V=$UMASK t ./dive test_dived    /bin/bash -c 'umask')
 
+announce    No stray FDs
+prepare_dived
+E=0 V=`/bin/ls -1 /proc/self/fd/` t ./dive test_dived    /bin/ls -1 /proc/self/fd/
 
+announce    No stray FDs '(dived -n)'
+prepare_dived --signals
+E=0 V=`/bin/ls -1 /proc/self/fd/` t ./dive test_dived    /bin/ls -1 /proc/self/fd/
 
 
 
