@@ -11,7 +11,8 @@ function t() {
     
     VAL=`"$@" < /dev/null 2> /dev/null`
     C=$?
-    if [ "$C" != "$E" ]; then
+    if [[ "$C" != "0" && "$E" == "fail" ]]; then C=fail; fi
+    if [ "$C" != "$E"  ]; then
         if [ -z "$MF" ]; then # "May fail"
             echo "FAIL code=$C"
             STATUS=1
@@ -130,7 +131,7 @@ E=0 V="qwerty" t ./dive test_dived /bin/bash -c 'cat <&100' 100<<< "qwerty"
 
 announce    dived -O option
 prepare_dived --no-fds
-E=1 V=""       t ./dive test_dived /bin/bash -c 'cat <&100' 100<<< "qwerty"
+E=fail V=""       t ./dive test_dived /bin/bash -c 'cat <&100' 100<<< "qwerty"
 
 announce    Current directory preservation
 prepare_dived
@@ -177,7 +178,7 @@ announce    ping works
 E=0 MF=1 V='nocheck' t /bin/ping -c 1 127.0.0.1
 
 announce    ping fails when from dived -X
-E=2 MF=1 V='nocheck' t ./dived --just-execute --no-new-privs -- /bin/ping -c 1 127.0.0.1
+E=fail MF=1 V='nocheck' t ./dived --just-execute --no-new-privs -- /bin/ping -c 1 127.0.0.1
 
 
 announce    signal delivery without --signals
@@ -188,5 +189,27 @@ E=0 V='qqq' t ./dive test_dived /bin/bash -c 'trap "echo qqq" USR1; kill -USR1 $
 announce    signal delivery with --signals
 prepare_dived --signals
 E=0 V='qqq' t ./dive test_dived /bin/bash -c 'trap "echo qqq" USR1; kill -USR1 $DIVE_PID; sleep 0.2'
+
+announce    simple --authenticate test
+prepare_dived --authenticate 'printf qqq'
+E=0 V="qqqwww" t ./dive test_dived /bin/echo "www"
+
+
+announce    failed authentication test
+prepare_dived --authenticate /bin/false
+E=fail V=''    t ./dive test_dived /bin/echo "qqq"
+
+announce    no pwd, env or umask is preserved for auth prog
+export QQQ=3443
+V=`pwd; echo $QQQ; umask;`
+prepare_dived --authenticate 'pwd; echo $QQQ; umask;'
+E=0 V="$V" 
+mkdir -p testdir
+(cd testdir; umask 0354; E=0 V="$V" QQQ=1234 t ../dive ../test_dived /bin/true)
+rmdir testdir
+
+announce   signals are not delivered to auth prog
+prepare_dived --signals --authenticate 'trap "printf qqq" USR1; printf rrr; sleep 0.2; printf www'
+E=fail MF=1 V="rrrwww" t /bin/bash -c './dive test_dived /bin/bash -c "sleep 0.3; printf yyy"& sleep 0.1; kill -USR1 $!; wait $!'
 
 exit $STATUS 
