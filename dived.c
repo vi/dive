@@ -407,12 +407,23 @@ int serve_client(int fd, struct dived_options *opts) {
     int initialisation_finished_event[2];
     pipe2(initialisation_finished_event, O_CLOEXEC);
 
+    int signal_fd = -1;
+    if (opts->signal_processing) {
+        sigset_t mask;
+        sigemptyset(&mask);
+        sigaddset(&mask, SIGCHLD);
+        signal_fd = signalfd(-1, &mask, 0/*SFD_NONBLOCK*/);
+        sigprocmask(SIG_BLOCK, &mask, NULL);
+    }
+
     int pid2 = 0;
     if (!opts->just_execute) {
         pid2 = fork();
     }
     
     if (!pid2) {
+        if (signal_fd != -1) close(signal_fd);
+
         if (!opts->just_execute) {
         
         /* Receive argv */
@@ -522,12 +533,6 @@ int serve_client(int fd, struct dived_options *opts) {
     int status;
     if (opts->signal_processing) {
         fcntl(dive_signal_fd, F_SETFL, O_NONBLOCK);
-        
-        sigset_t mask;
-        sigemptyset(&mask);
-        sigaddset(&mask, SIGCHLD);
-        int signal_fd = signalfd(-1, &mask, 0/*SFD_NONBLOCK*/);
-        sigprocmask(SIG_BLOCK, &mask, NULL);
         
         int maxfd = (signal_fd > dive_signal_fd) ? signal_fd  : dive_signal_fd;
         
