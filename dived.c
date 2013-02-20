@@ -526,22 +526,19 @@ int serve_client(int fd, struct dived_options *opts) {
         sigset_t mask;
         sigemptyset(&mask);
         sigaddset(&mask, SIGCHLD);
-        int signal_fd = signalfd(-1, &mask, SFD_NONBLOCK);
+        int signal_fd = signalfd(-1, &mask, 0/*SFD_NONBLOCK*/);
+        sigprocmask(SIG_BLOCK, &mask, NULL);
         
         int maxfd = (signal_fd > dive_signal_fd) ? signal_fd  : dive_signal_fd;
         
+        int ret;
         for(;;) {
             fd_set rfds;
-            int ret;
             
             FD_ZERO(&rfds);
             FD_SET(signal_fd, &rfds);
             FD_SET(dive_signal_fd, &rfds);
-            
-	    ret = waitpid(pid2, &status, WNOHANG);
-	    if (ret!=0) {
-	        break;
-	    }
+               
 
             ret = select(maxfd+1, &rfds, NULL, NULL, NULL);
             
@@ -550,22 +547,34 @@ int serve_client(int fd, struct dived_options *opts) {
                 break;
             }
             
-            
             if (FD_ISSET(dive_signal_fd, &rfds)) {
                 struct signalfd_siginfo si;
                 if (read(dive_signal_fd, &si, sizeof si)>0) {
                     kill(pid2, si.ssi_signo);
                 }                
             }
-        }            
+            
+            
+            if (FD_ISSET(signal_fd, &rfds)) {
+                struct signalfd_siginfo si;
+                if (read(signal_fd, &si, sizeof si)>0) {
+                    if (si.ssi_pid == pid2 && si.ssi_signo == SIGCHLD) {
+                        status = si.ssi_status;
+                        safer_write(fd, (char*)&si.ssi_status, 4);
+                        return 0;
+                    }
+                }
+                
+            }
+        }      
     } else {
         close(dive_signal_fd);
         waitpid(pid2, &status, 0);
+        int exitcode = WEXITSTATUS(status);
+        safer_write(fd, (char*)&exitcode, sizeof(exitcode));
+        return 0;
     }
-
-    int exitcode = WEXITSTATUS(status);
-    safer_write(fd, (char*)&exitcode, sizeof(exitcode));
-    return 0;
+    return 1;
 }
 
 
