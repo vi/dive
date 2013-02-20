@@ -408,7 +408,7 @@ int serve_client(int fd, struct dived_options *opts) {
     pipe2(initialisation_finished_event, O_CLOEXEC);
 
     int signal_fd = -1;
-    if (opts->signal_processing) {
+    if (!opts->just_execute) {
         sigset_t mask;
         sigemptyset(&mask);
         sigaddset(&mask, SIGCHLD);
@@ -574,6 +574,17 @@ int serve_client(int fd, struct dived_options *opts) {
         }      
     } else {
         close(dive_signal_fd);
+        
+        struct signalfd_siginfo si;
+        read(signal_fd, &si, sizeof si);
+        if (si.ssi_pid == pid2 && si.ssi_signo == SIGCHLD) {
+            status = si.ssi_status;
+            safer_write(fd, (char*)&si.ssi_status, 4);
+            return 0;
+        }
+        /* fallback */
+        close(signal_fd);
+        
         waitpid(pid2, &status, 0);
         int exitcode = WEXITSTATUS(status);
         safer_write(fd, (char*)&exitcode, sizeof(exitcode));
