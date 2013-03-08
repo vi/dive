@@ -54,6 +54,9 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("    DIVE_CURDIR   - use this current directory instead of \".\"\n");
         printf("    DIVE_ROOTDIR  - use this root directory instead of \"/\"\n");
         printf("    DIVE_TERMINAL - use this instead of \"@0\" (can be path to file or @fd)\n");
+        printf("    DIVE_NOWAIT   - \n");
+        printf("                    0(default) - request remote waiting\n");
+        printf("                    1 - don't wait, just start the program remotely in background\n");
         printf("    Note that DIVE_* variables are filtered out by dived.\n");
         return 4;
     }
@@ -68,10 +71,11 @@ int main(int argc, char* argv[], char* envp[]) {
     const char* curdir_path  = ".";
     const char* rootdir_path = "/";
     const char* terminal_path = "@0";
+    int dive_waiting_mode = 0;
     if (getenv("DIVE_CURDIR"))   curdir_path   = getenv("DIVE_CURDIR");
     if (getenv("DIVE_ROOTDIR"))  rootdir_path  = getenv("DIVE_ROOTDIR");
     if (getenv("DIVE_TERMINAL")) terminal_path = getenv("DIVE_TERMINAL");
-
+    if (getenv("DIVE_NOWAIT")) dive_waiting_mode = atoi(getenv("DIVE_NOWAIT"));
 
     memset(&addr, 0, sizeof(struct sockaddr_un));
     addr.sun_family = AF_UNIX;
@@ -133,9 +137,17 @@ int main(int argc, char* argv[], char* envp[]) {
     }
     
     int remote_waiting_requested = 1;
+    
+    if (dive_waiting_mode>0) remote_waiting_requested=0;
+    
     int remote_waiting_enabled;
     safer_write(fd, (char*)&remote_waiting_requested, sizeof(remote_waiting_requested));
     safer_read(fd, (char*)&remote_waiting_enabled, sizeof(remote_waiting_enabled));
+    
+    if (dive_waiting_mode == 0 && remote_waiting_enabled == 0) {
+        fprintf(stderr, "dive: Warning: can't request proper waiting for program termination.\n");
+        fprintf(stderr, "Use DIVE_NOWAIT=1 to explicitly disable the waiting\n");
+    }
     
     /* Send and close all file descriptors */
     int i, u;
@@ -273,7 +285,12 @@ int main(int argc, char* argv[], char* envp[]) {
             }
         }
     }
-        
+    
+    if (!remote_waiting_enabled) {
+        /* Can't directly determine whether our application is finished, so exiting */
+        return 0;
+    }
+    
     /* Read the exitcode */
     int exitcode;
     ret = safer_read(fd, (char*)&exitcode, sizeof(exitcode));
