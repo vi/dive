@@ -54,7 +54,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("    DIVE_CURDIR   - use this current directory instead of \".\"\n");
         printf("    DIVE_ROOTDIR  - use this root directory instead of \"/\"\n");
         printf("    DIVE_TERMINAL - use this instead of \"@0\" (can be path to file or @fd)\n");
-        printf("    DIVE_NOWAIT   - \n");
+        printf("    DIVE_WAITMODE   - \n");
         printf("                    0(default) - request remote waiting\n");
         printf("                    1 - don't wait, just start the program remotely in background\n");
         printf("                    2 - workaround waiting (using a FD)\n");
@@ -76,10 +76,10 @@ int main(int argc, char* argv[], char* envp[]) {
     if (getenv("DIVE_CURDIR"))   curdir_path   = getenv("DIVE_CURDIR");
     if (getenv("DIVE_ROOTDIR"))  rootdir_path  = getenv("DIVE_ROOTDIR");
     if (getenv("DIVE_TERMINAL")) terminal_path = getenv("DIVE_TERMINAL");
-    if (getenv("DIVE_NOWAIT")) dive_waiting_mode = atoi(getenv("DIVE_NOWAIT"));
+    if (getenv("DIVE_WAITMODE")) dive_waiting_mode = atoi(getenv("DIVE_WAITMODE"));
         
     if (dive_waiting_mode < 0 || dive_waiting_mode > 2) {
-        fprintf(stderr, "Unknown DIVE_NOWAIT value\n");
+        fprintf(stderr, "Unknown DIVE_WAITMODE value\n");
         return 12;
     }
 
@@ -152,7 +152,8 @@ int main(int argc, char* argv[], char* envp[]) {
     
     if (dive_waiting_mode == 0 && remote_waiting_enabled == 0) {
         fprintf(stderr, "dive: Warning: can't request proper waiting for program termination.\n");
-        fprintf(stderr, "Use DIVE_NOWAIT=1 to explicitly disable the waiting\n");
+        fprintf(stderr, "Use DIVE_WAITMODE=1 to explicitly disable the waiting\n");
+        fprintf(stderr, "or DIVE_WAITMODE=2 to use workaround waiting\n");
     }
     
     int workaround_waiting_fd[]={-1,-1};
