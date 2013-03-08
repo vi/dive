@@ -151,9 +151,11 @@ int main(int argc, char* argv[], char* envp[]) {
     safer_read(fd, (char*)&remote_waiting_enabled, sizeof(remote_waiting_enabled));
     
     if (dive_waiting_mode == 0 && remote_waiting_enabled == 0) {
-        fprintf(stderr, "dive: Warning: can't request proper waiting for program termination.\n");
+        fprintf(stderr, "dive: Warning: can't request proper waiting for program termination from dived\n");
+        fprintf(stderr, "Switching to workaround waiting (adding additional FD)\n");
         fprintf(stderr, "Use DIVE_WAITMODE=1 to explicitly disable the waiting\n");
-        fprintf(stderr, "or DIVE_WAITMODE=2 to use workaround waiting\n");
+        fprintf(stderr, "or DIVE_WAITMODE=2 to explicitly request workaround waiting\n");
+        dive_waiting_mode = 2;
     }
     
     int workaround_waiting_fd[]={-1,-1};
