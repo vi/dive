@@ -212,4 +212,32 @@ announce   signals are not delivered to auth prog
 prepare_dived --signals --authenticate 'trap "printf qqq" USR1; printf rrr; sleep 0.2; printf www'
 E=fail MF=1 V="rrrwww" t /bin/bash -c './dive test_dived /bin/bash -c "sleep 0.3; printf yyy"& sleep 0.1; kill -USR1 $!; wait $!'
 
+
+
+announce    DIVE_WAITMODE=0 works
+prepare_dived
+E=0 V='wwwqqq' t /bin/bash -c 'DIVE_WAITMODE=0 ./dive test_dived /bin/bash -c "sleep 0.3; printf www"; printf qqq'
+
+announce    DIVE_WAITMODE=1 works
+prepare_dived
+E=0 V='qqqwww' t /bin/bash -c 'DIVE_WAITMODE=1 ./dive test_dived /bin/bash -c "sleep 0.3; printf www"; printf qqq'
+
+announce    DIVE_WAITMODE=2 works
+prepare_dived
+E=0 V='wwwqqq' t /bin/bash -c 'DIVE_WAITMODE=2 ./dive test_dived /bin/bash -c "sleep 0.3; printf www"; printf qqq'
+
+announce    DIVE_WAITMODE=0 with dived -w works
+prepare_dived --no-wait
+E=0 V='wwwqqq' t /bin/bash -c 'DIVE_WAITMODE=0 ./dive test_dived /bin/bash -c "sleep 0.3; printf www"; printf qqq'
+
+announce    DIVE_WAITMODE=1 with dived -w works
+prepare_dived --no-wait
+E=0 V='qqqwww' t /bin/bash -c 'DIVE_WAITMODE=1 ./dive test_dived /bin/bash -c "sleep 0.3; printf www"; printf qqq'
+
+announce    DIVE_WAITMODE=2 with dived -w works
+prepare_dived --no-wait
+E=0 V='wwwqqq' t /bin/bash -c 'DIVE_WAITMODE=2 ./dive test_dived /bin/bash -c "sleep 0.3; printf www"; printf qqq'
+
+
+
 exit $STATUS 
