@@ -31,8 +31,8 @@ void sigint(int arg) {
 
 #define MAXFD 1024
 
-#define VERSION 901
-#define VERSION2 "v0.8"
+#define VERSION 1100
+#define VERSION2 "v1.1"
 
 int main(int argc, char* argv[], char* envp[]) {
     int fd;
@@ -132,6 +132,11 @@ int main(int argc, char* argv[], char* envp[]) {
         close(terminal);
     }
     
+    int remote_waiting_requested = 1;
+    int remote_waiting_enabled;
+    safer_write(fd, (char*)&remote_waiting_requested, sizeof(remote_waiting_requested));
+    safer_read(fd, (char*)&remote_waiting_enabled, sizeof(remote_waiting_enabled));
+    
     /* Send and close all file descriptors */
     int i, u;
     for(i=0; i<MAXFD; ++i) {
@@ -207,27 +212,32 @@ int main(int argc, char* argv[], char* envp[]) {
     safer_write(fd, buf2, totallen);
     free(buf2);
 
-
-    
-    /* Receive executed PID */
-    safer_read(fd, (char*)&executed_pid, sizeof(theirpid));
-    
-    /* Server is leaving our client socket as "marker" 
-     *
-     * We will get EOF here when all processes started there exit
-     */
-    
-    /* process signals and re-send them (maybe direcly, maybe with dived's assistance)*/
-    
     int remote_signal_processing;
-    ret = safer_read(fd, (char*)&remote_signal_processing, sizeof(remote_signal_processing));
-    
     int sv[2];
-    if (remote_signal_processing) {
-        socketpair(AF_UNIX, SOCK_DGRAM, 0, sv);
-        send_fd(fd, sv[0]);
+    
+    if (remote_waiting_enabled) {
+    
+        /* Receive executed PID */
+        safer_read(fd, (char*)&executed_pid, sizeof(theirpid));
+        
+        /* Server is leaving our client socket as "marker" 
+         *
+         * We will get EOF here when all processes started there exit
+         */
+        
+        /* process signals and re-send them (maybe direcly, maybe with dived's assistance)*/
+        
+        ret = safer_read(fd, (char*)&remote_signal_processing, sizeof(remote_signal_processing));
+        
+        if (remote_signal_processing) {
+            socketpair(AF_UNIX, SOCK_DGRAM, 0, sv);
+            send_fd(fd, sv[0]);
+        } else {
+            send_fd(fd, -1);
+        }
     } else {
-        send_fd(fd, -1);
+        executed_pid = theirpid;
+        remote_signal_processing = 0;
     }
     
     if (signal_fd != -1) {

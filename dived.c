@@ -33,7 +33,7 @@
 
 #define MAXFD 1024
 
-#define VERSION 901
+#define VERSION 1100
 #define VERSION2 "v1.1"
 
 #define CLONE_STACK_SIZE  (1024*16)
@@ -83,6 +83,7 @@ struct dived_options {
     int just_execute;
     int lock_securebits;
     int signal_processing;
+    int fork_and_wait_for_exit_code;
 } options;
 
 
@@ -90,6 +91,8 @@ struct dived_options {
 int serve_client(int fd, struct dived_options *opts) {
     int ret;
     (void)ret;
+    
+    int exit_code_or_signal_processing_enabled = opts->fork_and_wait_for_exit_code && !opts->just_execute;
 
     if (opts->chroot_) {
         chroot(opts->chroot_);
@@ -145,6 +148,16 @@ int serve_client(int fd, struct dived_options *opts) {
 
     /* Receive file descriptor to be controlling terminal */
     terminal_fd = recv_fd(fd);
+    
+    
+    /* Receive flag whether client wants us to stay and wait for exit code */
+    int waiting_requested;
+    safer_read(fd, (char*)&waiting_requested, sizeof(waiting_requested));
+    
+    if (!waiting_requested) exit_code_or_signal_processing_enabled=0;
+        
+    /* Send whether we will wait for the client */
+    safer_write(fd, (char*)&exit_code_or_signal_processing_enabled, sizeof(exit_code_or_signal_processing_enabled));
 
     /* Receive and apply file descriptors */
     memset(saved_fdnums, 0, sizeof saved_fdnums);
@@ -420,7 +433,7 @@ int serve_client(int fd, struct dived_options *opts) {
     }
 
     int pid2 = 0;
-    if (!opts->just_execute) {
+    if (exit_code_or_signal_processing_enabled) {
         pid2 = fork();
     }
     
@@ -641,7 +654,7 @@ int main(int argc, char* argv[], char* envp[]) {
     if(argc<2 || !strcmp(argv[1], "-?") || !strcmp(argv[1], "--help") || !strcmp(argv[1], "--version")) {
         printf("Dive server %s (proto %d) https://github.com/vi/dive/\n", VERSION2, VERSION);
         printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");
-        printf("Usage: dived {socket_path|@abstract_address|-i|-J} [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-e effective_user] "
+        printf("Usage: dived {socket_path|@abstract_address|-i|-J} [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-e effective_user] [-n] [-w] "
                "[-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] [-a \"program\"] "
                "[{-B cap_smth1,cap_smth2|-b cap_smth1,cap_smth2}] [-X] [-c 'cap_smth+eip cap_smth2+i'] "
                "[-- prepended commandline parts]\n");
@@ -684,6 +697,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -O --no-fds           Don't let client set file descriptors\n");
         printf("          -M --no-umask         Don't let client set umask\n");
         printf("          -n --signals          Transfer all signals from dive\n");
+        printf("          -w --no-wait          Don't fork and wait for exit code\n");
         printf("          --                    prepend this to each command line ('--' is mandatory)\n");
         printf("              Note that the program being started using \"--\" should be\n");
         printf("              as secure as suid programs, but it doesn't know\n");
@@ -729,6 +743,7 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->no_new_privs = 0;
     opts->just_execute = 0;
     opts->lock_securebits = 0;
+    opts->fork_and_wait_for_exit_code = 1;
     if(!strcmp(argv[1], "-i") || !strcmp(argv[1], "--inetd")) { opts->inetd = 1; }
     if(!strcmp(argv[1], "-J") || !strcmp(argv[1], "--just-execute")) { opts->just_execute = 1; }
 
@@ -830,6 +845,9 @@ int main(int argc, char* argv[], char* envp[]) {
             if(!strcmp(argv[i], "-n") || !strcmp(argv[i], "--signals")) {
                 opts->signal_processing = 1;
             }else
+            if(!strcmp(argv[i], "-w") || !strcmp(argv[i], "--no-wait")) {
+                opts->fork_and_wait_for_exit_code = 0;
+            }else
             if(!strcmp(argv[i], "--")) {
                 opts->forced_argv = &argv[i+1];
                 opts->forced_argv_count = argc - (i+1);
@@ -858,6 +876,11 @@ int main(int argc, char* argv[], char* envp[]) {
     
     if (opts->just_execute && opts->unshare_) {
         fprintf(stderr, "--just-execute and --unshare are incompatible\n");
+        return 15;
+    }
+    
+    if (!opts->fork_and_wait_for_exit_code && opts->signal_processing) {
+        fprintf(stderr, "--no-wait and --signals are incompatible\n");
         return 15;
     }
     
