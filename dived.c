@@ -159,7 +159,10 @@ int serve_client(int fd, struct dived_options *opts) {
             return 7;
         }
         int f = recv_fd(fd);                
-        if(!opts->client_fds)continue;
+        if (!opts->client_fds) {
+            close(f);
+            continue;
+        }
         if(i==fd) {
             /* Move away our socket desciptor */
             int tmp = dup(fd);
