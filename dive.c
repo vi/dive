@@ -57,6 +57,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("    DIVE_NOWAIT   - \n");
         printf("                    0(default) - request remote waiting\n");
         printf("                    1 - don't wait, just start the program remotely in background\n");
+        printf("                    2 - workaround waiting (using a FD)\n");
         printf("    Note that DIVE_* variables are filtered out by dived.\n");
         return 4;
     }
@@ -76,6 +77,11 @@ int main(int argc, char* argv[], char* envp[]) {
     if (getenv("DIVE_ROOTDIR"))  rootdir_path  = getenv("DIVE_ROOTDIR");
     if (getenv("DIVE_TERMINAL")) terminal_path = getenv("DIVE_TERMINAL");
     if (getenv("DIVE_NOWAIT")) dive_waiting_mode = atoi(getenv("DIVE_NOWAIT"));
+        
+    if (dive_waiting_mode < 0 || dive_waiting_mode > 2) {
+        fprintf(stderr, "Unknown DIVE_NOWAIT value\n");
+        return 12;
+    }
 
     memset(&addr, 0, sizeof(struct sockaddr_un));
     addr.sun_family = AF_UNIX;
@@ -149,12 +155,28 @@ int main(int argc, char* argv[], char* envp[]) {
         fprintf(stderr, "Use DIVE_NOWAIT=1 to explicitly disable the waiting\n");
     }
     
+    int workaround_waiting_fd[]={-1,-1};
+    
+    if (dive_waiting_mode==2) {
+        int ret = pipe2(workaround_waiting_fd, 0);
+        if (ret==-1) {
+            perror("pipe2");
+            return 12;
+        }
+    }
+    
     /* Send and close all file descriptors */
     int i, u;
     for(i=0; i<MAXFD; ++i) {
         struct stat st;
         ret = fstat(i, &st);
-        if(ret!=-1 && i!=fd && i!=signal_fd) {
+        
+        if (i==fd) continue;
+        if (signal_fd!= -1 && i==signal_fd) continue;
+        if (workaround_waiting_fd[0] != -1 && i==workaround_waiting_fd[0]) continue;
+        // write end  of workaround_waiting_fd is actually sent to the remote
+        
+        if(ret!=-1) {
             safer_write(fd, (char*)&i, sizeof(i));
             send_fd(fd, i);
             if (i!=2) {
@@ -163,9 +185,11 @@ int main(int argc, char* argv[], char* envp[]) {
         }
     }
     
+    
     i=-1;
     safer_write(fd, (char*)&i, sizeof(i));
 
+    if (workaround_waiting_fd[1]!=-1) close(workaround_waiting_fd[1]);
 
     /* Send umask */
     mode_t umask_ = umask(0);
@@ -250,6 +274,17 @@ int main(int argc, char* argv[], char* envp[]) {
     } else {
         executed_pid = theirpid;
         remote_signal_processing = 0;
+        close(fd);
+        fd=-1;
+    }
+    
+    if(workaround_waiting_fd[0]!=-1) {
+        fd = workaround_waiting_fd[0];
+    }
+    
+    if (fd==-1) {
+        /* Can't directly determine whether our application is finished, so exiting */
+        return 0;
     }
     
     if (signal_fd != -1) {
@@ -260,7 +295,9 @@ int main(int argc, char* argv[], char* envp[]) {
             
             FD_ZERO(&rfds);
             FD_SET(signal_fd, &rfds);
-            FD_SET(fd, &rfds);
+            if(fd!=-1) {
+                FD_SET(fd, &rfds);
+            }
             
             ret = select(maxfd+1, &rfds, NULL, NULL, NULL);
             
@@ -269,7 +306,7 @@ int main(int argc, char* argv[], char* envp[]) {
                 break;
             }
             
-            if(FD_ISSET(fd, &rfds)) {
+            if(fd!=-1 && FD_ISSET(fd, &rfds)) {
                 break;
             }
             
@@ -286,21 +323,15 @@ int main(int argc, char* argv[], char* envp[]) {
         }
     }
     
-    if (!remote_waiting_enabled) {
-        /* Can't directly determine whether our application is finished, so exiting */
-        return 0;
-    }
-    
     /* Read the exitcode */
-    int exitcode;
+    int exitcode=0;
     ret = safer_read(fd, (char*)&exitcode, sizeof(exitcode));
-    if (ret!=sizeof(exitcode)) {
+    
+    if (ret!=sizeof(exitcode) && dive_waiting_mode!=2) {
         fprintf(stderr, "dive: Something failed with the server ret=%d\n", ret);
         return 127;
     }
-    
-    
-    
+
     if (exitcode==127) {
         fprintf(stderr, "dive: Probably can't execute command\n");
     }
