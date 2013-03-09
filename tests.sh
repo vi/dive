@@ -36,19 +36,13 @@ function t() {
     echo " OK "
 }
 
-function pt() {
-    # Privileged test
-
-    if [ "$UID" != "0" ]; then
-        echo "REQUIRES ROOT"
-        return 0
-    fi
-    t "$@"
+function terminate_dived() {
+    test -e test_dived.pid && pkill -F test_dived.pid
+    rm -f test_dived test_dived.pid
 }
 
 function prepare_dived() {
-    test -e test_dived.pid && pkill -F test_dived.pid
-    rm -f test_dived
+    terminate_dived
     ./dived test_dived --detach --pidfile test_dived.pid "$@"
 } 
 
@@ -56,12 +50,12 @@ function announce() {
     printf "%-50s" "$*"
 }
 
-trap 'pkill -F test_dived.pid; rm -f test_dived test_dived.pid' EXIT
+trap 'terminate_dived' EXIT
 
 
 
 
-
+#if false; then
 
 
 announce    Dummy dived call
@@ -237,6 +231,34 @@ E=0 V='qqqwww' t /bin/bash -c 'DIVE_WAITMODE=1 ./dive test_dived /bin/bash -c "s
 announce    DIVE_WAITMODE=2 with dived -w works
 prepare_dived --no-wait
 E=0 V='wwwqqq' t /bin/bash -c 'DIVE_WAITMODE=2 ./dive test_dived /bin/bash -c "sleep 0.3; printf www"; printf qqq'
+
+#fi
+
+terminate_dived
+    
+announce 'Can we test with inetd? (inetd and socat works)'
+inetd -i <(echo 'test_dived stream unix nowait vi  /bin/echo echo qqq')&
+INETD_PID=$!
+sleep 0.1
+E=0 V='qqq' t socat unix-connect:test_dived  -
+kill $INETD_PID
+
+terminate_dived
+
+announce 'Testing --inetd mode'
+inetd -i <(echo 'test_dived stream unix nowait vi  ./dived dived -i -T -P')&
+INETD_PID=$!
+sleep 0.1
+E=0 V='qqq' t ./dive test_dived /bin/echo qqq
+kill $INETD_PID
+
+
+if [ "$UID" != "0" ]; then
+    echo "The rest tests require root access"
+    exit $STATUS 
+fi
+
+
 
 
 
