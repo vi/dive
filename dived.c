@@ -392,7 +392,7 @@ retry_accept:
 
 int main(int argc, char* argv[], char* envp[]) {
     if(argc<2 || !strcmp(argv[1], "-?") || !strcmp(argv[1], "--help") || !strcmp(argv[1], "--version")) {
-        printf("Dive server %s (proto %d) https://github.com/vi/dive/\n", VERSION2, VERSION);
+        printf("Dive server %s (proto %d) nocreep https://github.com/vi/dive/\n", VERSION2, VERSION);
         printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");
         printf("Usage: dived {socket_path|@abstract_address|-i} [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-e effective_user] "
                "[-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] [-a \"program\"] "
