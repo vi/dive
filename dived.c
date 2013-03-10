@@ -463,6 +463,10 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->root_to_current = 0;
     opts->authentication_program = NULL;
     if(!strcmp(argv[1], "-i") || !strcmp(argv[1], "--inetd")) { opts->inetd = 1; }
+    if(!strcmp(argv[1], "-J") || !strcmp(argv[1], "--just-execute")) { 
+        fprintf(stderr, "--just-execute option is not supported in 'nocreep' edition\n");
+        return 1;
+    }
 
     {
         int i;
