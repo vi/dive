@@ -663,7 +663,8 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -J --just-execute     don't mess with sockets at all, just execute the program.\n");
         printf("                                Other options does apply.\n");
         printf("          -D --children-daemon  call daemon(0,0) in children\n");
-        printf("          -F --no-fork          no fork, serve once (debugging)\n");
+        printf("          -F --no-fork          no fork, serve once\n");
+        printf("                                this is for debugging or for starting init process in PID unshare\n");
         printf("          -P --no-setuid        no setuid/setgid/etc\n");
         printf("          -u --user             setuid to this user instead of the client\n");
         printf("          -e --effective-user   seteuid to this user instead of the client\n");
@@ -859,11 +860,7 @@ int main(int argc, char* argv[], char* envp[]) {
             }
         }
     }
-    
-    if (opts->nofork && opts->unshare_) {
-        fprintf(stderr, "Nofork and unshare options are incompatible\n");
-        return 14;
-    }
+
     if (opts->inetd && opts->unshare_) {
         fprintf(stderr, "--inetd and --unshare are incompatible\n");
         return 15;
