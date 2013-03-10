@@ -613,6 +613,13 @@ int serve_client(int fd, struct dived_options *opts) {
 
 
 int serve(struct dived_options* opts) {
+    if (opts->inetd) {
+        return serve_client(0, opts);
+    } 
+    if (opts->just_execute) {
+        return serve_client(-1, opts);
+    }
+    
     int sock = opts->sock;
 
     for(;;) {
@@ -860,19 +867,9 @@ int main(int argc, char* argv[], char* envp[]) {
             }
         }
     }
-
-    if (opts->inetd && opts->unshare_) {
-        fprintf(stderr, "--inetd and --unshare are incompatible\n");
-        return 15;
-    }
     
     if (opts->just_execute && opts->inetd) {
         fprintf(stderr, "--just-execute and --inetd are incompatible\n");
-        return 15;
-    }
-    
-    if (opts->just_execute && opts->unshare_) {
-        fprintf(stderr, "--just-execute and --unshare are incompatible\n");
         return 15;
     }
     
@@ -895,13 +892,7 @@ int main(int argc, char* argv[], char* envp[]) {
     
     if(!opts->nodaemon) daemon(1, 0);
     
-    
-    if (opts->inetd) {
-        return serve_client(0, opts);
-    } 
-    if (opts->just_execute) {
-        return serve_client(-1, opts);
-    }
+    if (!opts->inetd && !opts->just_execute) {
     
     struct sockaddr_un addr;
     int ret;
@@ -982,6 +973,8 @@ int main(int argc, char* argv[], char* envp[]) {
             return 15;
         }
     }
+    
+    } // not --just-execute and not --inetd
     
     /* Save pidfile */
     if (opts->pidfile && !opts->unshare_){
