@@ -26,9 +26,6 @@
 #define VERSION 800
 #define VERSION2 "v1.0"
 
-#define CLONE_STACK_SIZE  (1024*16)
-// For use with "--unshare"
-
 int saved_fdnums[MAXFD];
 
 extern char **environ;
@@ -61,7 +58,6 @@ struct dived_options {
     int client_argv;
     char* chroot_;
     char** envp;
-    char* unshare_;
     int inetd;
     int client_chroot;
     int root_to_current;
@@ -419,8 +415,6 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -r --client-chroot    Allow arbitrary chroot from client\n");
         printf("          -W --root-to-current  Set server's root directory as current directory\n");
         printf("                                (implies -H; useful with -r)\n");
-        printf("          -s --unshare          Unshare this (comma-separated list); also detaches\n");
-        printf("                                ipc,net,fs,pid,uts\n");
         printf("          -p --pidfile          save PID to this file\n");
         printf("          -C --chmod            chmod the socket to this mode (like '0777')\n");
         printf("          -U --chown            chown the socket to this user:group\n");
@@ -464,7 +458,6 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->client_environment = 1;
     opts->chroot_ = NULL;
     opts->envp = envp;
-    opts->unshare_ = NULL;
     opts->inetd = 0;
     opts->client_chroot = 0;
     opts->root_to_current = 0;
@@ -520,8 +513,8 @@ int main(int argc, char* argv[], char* envp[]) {
                 ++i;
             }else
             if(!strcmp(argv[i], "-s") || !strcmp(argv[i], "--unshare")) {
-                opts->unshare_=argv[i+1];
-                ++i;
+                fprintf(stderr, "Unsharing namespaces is not supported in 'nocreep' edition of dived\n");
+                return 1;
             }else
             if(!strcmp(argv[i], "-E") || !strcmp(argv[i], "--no-environment")) {
                 opts->client_environment = 0;
@@ -558,15 +551,6 @@ int main(int argc, char* argv[], char* envp[]) {
                 return 4;
             }
         }
-    }
-    
-    if (opts->nofork && opts->unshare_) {
-        fprintf(stderr, "Nofork and unshare options are incompatible\n");
-        return 14;
-    }
-    if (opts->inetd && opts->unshare_) {
-        fprintf(stderr, "--inetd and --unshare are incompatible\n");
-        return 15;
     }
     
     if(!opts->nodaemon) daemon(1, 0);
@@ -657,62 +641,11 @@ int main(int argc, char* argv[], char* envp[]) {
     }
     
     /* Save pidfile */
-    if (opts->pidfile && !opts->unshare_){
+    if (opts->pidfile){
         FILE* f = fopen(opts->pidfile, "w");
         fprintf(f, "%d\n", getpid());
         fclose(f);
     }
         
-    if (!opts->unshare_) {
-        return serve(opts);
-    } else {
-        int flags=0;
-        char* q = strtok(opts->unshare_, ",");
-        for(; q; q=strtok(NULL, ",")) {
-            if      (!strcmp(q,"ipc")) flags|=CLONE_NEWIPC;
-            else if (!strcmp(q,"net")) flags|=CLONE_NEWNET;
-            else if (!strcmp(q,"fs" )) flags|=CLONE_NEWNS;
-            else if (!strcmp(q,"pid")) flags|=CLONE_NEWPID;
-            else if (!strcmp(q,"uts")) flags|=CLONE_NEWUTS;
-            else {
-                fprintf(stderr, "Unknown unshare flag '%s'\n", q);
-                return 21;
-            }
-        }
-        
-        char* stack = malloc(CLONE_STACK_SIZE);
-        char* stack_pointer = stack;
-        
-        #ifndef CPU_STACK_GROWS_UP
-        #define CPU_STACK_GROWS_UP FALSE
-        #endif
-        
-        #ifndef FALSE
-        #define FALSE (0)
-        #endif
-        
-        #ifndef TRUE
-        #define TRUE (1)
-        #endif
-        
-        stack_pointer += (CPU_STACK_GROWS_UP) ? 0 : CLONE_STACK_SIZE;
-        int cpid = clone( (int(*)(void*)) serve, stack_pointer, CLONE_VM|flags, opts);
-        if (cpid == -1) {
-            perror("clone");
-            return 19;
-        }
-        
-        if (opts->pidfile){
-            FILE* f = fopen(opts->pidfile, "w");
-            fprintf(f, "%d\n", cpid);
-            fclose(f);
-        }
-        
-        if (opts->nodaemon) {
-            /* Now just block until explicitly killed. Without this our cloned thread will be terminated. */
-            for(;;) sleep(3600);
-        }
-        
-        return 0; 
-    }
+    return serve(opts);
 }
