@@ -1015,6 +1015,16 @@ int main(int argc, char* argv[], char* envp[]) {
         #define TRUE (1)
         #endif
         
+        int signal_fd = -1;
+        
+        if (opts->nodaemon) {
+            sigset_t mask;
+            sigemptyset(&mask);
+            sigaddset(&mask, SIGCHLD);
+            signal_fd = signalfd(-1, &mask, 0/*SFD_NONBLOCK*/);
+            sigprocmask(SIG_BLOCK, &mask, NULL);
+        }
+        
         stack_pointer += (CPU_STACK_GROWS_UP) ? 0 : CLONE_STACK_SIZE;
         int cpid = clone( (int(*)(void*)) serve, stack_pointer, CLONE_VM|flags, opts);
         if (cpid == -1) {
@@ -1028,9 +1038,34 @@ int main(int argc, char* argv[], char* envp[]) {
             fclose(f);
         }
         
-        if (opts->nodaemon) {
-            /* Now just block until explicitly killed. Without this our cloned thread will be terminated. */
-            for(;;) sleep(3600);
+        if (opts->nodaemon) {  
+            if (signal_fd!=-1) for(;;) {
+                struct signalfd_siginfo si;
+                int ret = read(signal_fd, &si, sizeof si);
+                if (ret!=-1 && si.ssi_pid == cpid && si.ssi_signo == SIGCHLD) {
+                    return si.ssi_status;
+                }
+                if (ret==-1) break;
+            }
+            
+            /* Fall-back to unreliable method */
+            
+            int status=0;
+            int spinlimit=100;
+            for(;;) {
+                int ret = waitpid(0, &status, 0);
+                fprintf(stderr, "ret=%d errno=%d status=%08x\n", ret, errno, status);
+                if (ret == cpid && WIFEXITED(status)) {
+                    return WEXITSTATUS(status);
+                }
+                if (ret == -1) {
+                    if (spinlimit) {
+                       --spinlimit; 
+                    } else {
+                        sleep(1);
+                    }
+                }
+            }
         }
         
         return 0; 
