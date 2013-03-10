@@ -12,6 +12,7 @@ Architecture: i386
 Version: $VERSION.0-1
 Provides: dive
 Recommends: reptyr(>=0.4)
+Depends: libcap2
 Description: Start programs in unshare/lxc namespaces easily and more. 
 EOF
 
