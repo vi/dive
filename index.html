@@ -187,7 +187,7 @@ alice$
 <li><strong>chroot</strong> : --chroot option</li>
 <li><strong><a href="http://libslack.org/daemon/">daemon</a></strong> : --children-daemon option</li>
 <li><strong><a href="http://man.devl.cz/man/8/capsh">capsh</a></strong> : --retain-capabilities/--remove-capabilities and --set-capabilities</li>
-<li><s><a href="http://linux.die.net/man/2/unshare">unshare</a> : --unshare option</s> Not implemented in the -J mode...</li>
+<li><a href="http://linux.die.net/man/2/unshare">unshare</a> : --unshare option</li>
 </ul>
 </p>
 
@@ -204,6 +204,20 @@ ping: icmp open socket: Operation not permitted
 <pre><code>root# setcap =ei /root/ping
 root# dived -J -S -T -u nobody -X -c "= cap_net_raw+ip" -- /root/ping 127.0.0.1</code></pre>
 
+<h4>Starting another "init"</h4>
+
+<pre><code>
+# dived -J -S -T -P --unshare pid,fs -- /bin/bash
+# mount -t proc proc /proc
+bash: child setpgid (8275 to 8275): No such process
+
+# ps aux
+bash: child setpgid (8369 to 8369): No such process
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.1  0.0   4628  1904 pts/13   S    04:48   0:00 /bin/bash
+root         5  0.0  0.0   4184  1100 pts/13   R+   04:48   0:00 ps aux
+# exit
+# </code></pre>
 
 
 <h2>inetd setup</h2>
