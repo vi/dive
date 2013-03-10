@@ -6,10 +6,16 @@ unset V
 unset E
 true ${UID:="`id -u`"}
 
+VERBOSE=0
+
 function t() {
     # call the specified argv, capture output and exit code, compare to $V and $E respectively
     
-    VAL=`"$@" < /dev/null 2> /dev/null`
+    if [ "$VERBOSE" == "0" ]; then
+        VAL=`"$@" < /dev/null 2> /dev/null`
+    else
+        VAL=`"$@" < /dev/null`
+    fi
     C=$?
     if [[ "$C" != "0" && "$E" == "fail" ]]; then C=fail; fi
     if [ "$C" != "$E"  ]; then
@@ -24,7 +30,7 @@ function t() {
     
     if [[ "$V" != "nocheck" && "$VAL" != "$V" ]]; then
         if [ -z "$MF" ]; then
-            echo "FAIL val=$VAL"
+            printf "FAIL\nexpected: %s\nactual:   %s\n" "$V" "$VAL"
             STATUS=1
         else
             echo "fail soft; val=$VAL"
@@ -232,8 +238,6 @@ announce    DIVE_WAITMODE=2 with dived -w works
 prepare_dived --no-wait
 E=0 V='wwwqqq' t /bin/bash -c 'DIVE_WAITMODE=2 ./dive test_dived /bin/bash -c "sleep 0.3; printf www"; printf qqq'
 
-#fi
-
 terminate_dived
     
 announce 'Can we test with inetd? (inetd and socat works)'
@@ -252,14 +256,85 @@ sleep 0.1
 E=0 V='qqq' t ./dive test_dived /bin/echo qqq
 kill $INETD_PID
 
+#fi
+
 
 if [ "$UID" != "0" ]; then
     echo "The rest tests require root access"
     exit $STATUS 
 fi
 
+NOBODY_UID=`cat /etc/passwd | grep '^nobody:' | cut -d: -f3`
+echo "NOBODY_UID=$NOBODY_UID"
+
+announce can we change to other user?
+E=0 V=$NOBODY_UID t su nobody -c 'id -u'
 
 
+VERBOSE=1
 
+terminate_dived
 
+announce dived preserve user by default
+prepare_dived  --chown nobody:0
+E=0 V=$NOBODY_UID t su nobody -c './dive test_dived /usr/bin/id -u' 
+
+announce dived preserve user by default --chmod
+prepare_dived  --chmod 777
+E=0 V=$NOBODY_UID t su nobody -c './dive test_dived /usr/bin/id -u'  
+
+announce dived sets up groups
+prepare_dived  --chown nobody:0
+E=0 V=`su nobody bash -c id` t su nobody -c './dive test_dived /usr/bin/id'
+
+announce dived -P does not touch things
+prepare_dived  --chown nobody:0 --no-setuid
+E=0 V=`id` t su nobody -c './dive test_dived /usr/bin/id'
+
+announce dived -u works
+prepare_dived  --chown nobody:0 --user root
+E=0 V=`id` t su nobody -c './dive test_dived /usr/bin/id'
+
+announce dived -u works 2
+prepare_dived  --chown nobody:0 --user nobody
+E=0 V=`su nobody bash -c id` t su nobody -c './dive test_dived /usr/bin/id'
+
+announce dived -e works
+prepare_dived  --chown nobody:0 --effective-user root
+E=0 V="uid=$NOBODY_UID(nobody) euid=0(root) " t \
+    su nobody -c './dive test_dived /usr/bin/id | tr " " "\n" | grep "^euid\|^uid" | tr "\n" " "'
+
+announce dived -u -e works
+prepare_dived  --chown nobody:0 --effective-user root --user nobody
+E=0 V="uid=$NOBODY_UID(nobody) euid=0(root) " t \
+    su nobody -c './dive test_dived /usr/bin/id | tr " " "\n" | grep "^euid\|^uid" | tr "\n" " "'
+
+announce dived -u -e works 2
+prepare_dived  --chown nobody:0 --effective-user nobody --user root
+E=0 V="uid=0(root) euid=$NOBODY_UID(nobody) " t \
+    su nobody -c './dive test_dived /usr/bin/id | tr " " "\n" | grep "^euid\|^uid" | tr "\n" " "'
+
+announce "Removing capabilities from bounding set (-B)"
+E=0 V="0000000" t ./dived -J --retain-capabilities '' -- bash -c "cat /proc/self/status | grep CapBnd | cut -c 18-"
+
+announce "Removing capabilities from bounding set (-b)"
+E=0 V="0000000" t ./dived -J \
+    --remove-capabilities '0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28' \
+    -- bash -c "cat /proc/self/status | grep CapBnd | cut -c 18-"
+    
+announce "Adding an inherited capability"
+E=0 V="0000800" t ./dived -J \
+    --set-capabilities '11+i' \
+    -- bash -c "cat /proc/self/status | grep CapInh | cut -c 18-"
+
+announce "--lock-securebits"
+E=0 V="0000000" t ./dived -J \
+    --lock-securebits \
+    -- bash -c "cat /proc/self/status | grep CapPrm | cut -c 18-"
+    
+announce   unsharing pid namespace
+terminate_dived
+./dived test_dived  --detach --pidfile test_dived.pid  --unshare pid --no-wait --no-fork
+DIVE_WAITMODE=2 E=0 V="1" t ./dive test_dived  bash -c 'echo $$'
+    
 exit $STATUS 
