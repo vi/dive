@@ -67,7 +67,7 @@ trap 'terminate_dived' EXIT
 
 
 
-#if false; then
+if [ -z "$TESTS_NO_USER" ]; then
 
 
 announce    Dummy dived call
@@ -262,7 +262,10 @@ sleep 0.1
 E=0 V='qqq' t ./$DIVE_NAME test_dived /bin/echo qqq
 kill $INETD_PID
 
-#fi
+fi # TESTS_NO_USER
+
+
+if [ -z "$TESTS_NO_ROOT" ]; then
 
 
 if [ "$UID" != "0" ]; then
@@ -281,42 +284,64 @@ VERBOSE=1
 
 terminate_dived
 
-announce dived preserve user by default
+announce dived --chown option
+prepare_dived  --chown $NOBODY_UID:0
+E=0 V=$NOBODY_UID t stat test_dived -c '%u'
+
+announce dived --chown name option 
 prepare_dived  --chown nobody:0
+E=0 V=$NOBODY_UID t stat test_dived -c '%u'
+
+announce dived --chmod option 
+prepare_dived  --chmod 765
+E=0 V=765 t stat test_dived -c '%a'
+
+announce dived --chown option actual
+prepare_dived  --chown $NOBODY_UID:0
+E=0 V=qqq t su nobody -c './$DIVE_NAME test_dived /bin/echo qqq' 
+
+announce dived --chown name option actual
+prepare_dived  --chown nobody:0
+E=0 V=qqq t su nobody -c './$DIVE_NAME test_dived /bin/echo qqq' 
+
+announce dived --chmod option actual
+prepare_dived  --chmod 777
+E=0 V=qqq t su nobody -c './$DIVE_NAME test_dived /bin/echo qqq' 
+
+
+announce dived preserve user by default
+prepare_dived  --chown $NOBODY_UID:0
 E=0 V=$NOBODY_UID t su nobody -c './$DIVE_NAME test_dived /usr/bin/id -u' 
 
-announce dived preserve user by default --chmod
-prepare_dived  --chmod 777
-E=0 V=$NOBODY_UID t su nobody -c './$DIVE_NAME test_dived /usr/bin/id -u'  
 
 announce dived sets up groups
-prepare_dived  --chown nobody:0
+prepare_dived  --chown $NOBODY_UID:0
 E=0 V=`su nobody bash -c id` t su nobody -c './$DIVE_NAME test_dived /usr/bin/id'
 
 announce dived -P does not touch things
-prepare_dived  --chown nobody:0 --no-setuid
+prepare_dived  --chown $NOBODY_UID:0 --no-setuid
 E=0 V=`id` t su nobody -c './$DIVE_NAME test_dived /usr/bin/id'
 
 announce dived -u works
-prepare_dived  --chown nobody:0 --user root
+prepare_dived  --chown $NOBODY_UID:0 --user root
 E=0 V=`id` t su nobody -c './$DIVE_NAME test_dived /usr/bin/id'
 
 announce dived -u works 2
-prepare_dived  --chown nobody:0 --user nobody
+prepare_dived  --chown $NOBODY_UID:0 --user nobody
 E=0 V=`su nobody bash -c id` t su nobody -c './$DIVE_NAME test_dived /usr/bin/id'
 
 announce dived -e works
-prepare_dived  --chown nobody:0 --effective-user root
+prepare_dived  --chown $NOBODY_UID:0 --effective-user root
 E=0 V="uid=$NOBODY_UID(nobody) euid=0(root) " t \
     su nobody -c './$DIVE_NAME test_dived /usr/bin/id | tr " " "\n" | grep "^euid\|^uid" | tr "\n" " "'
 
 announce dived -u -e works
-prepare_dived  --chown nobody:0 --effective-user root --user nobody
+prepare_dived  --chown $NOBODY_UID:0 --effective-user root --user nobody
 E=0 V="uid=$NOBODY_UID(nobody) euid=0(root) " t \
     su nobody -c './$DIVE_NAME test_dived /usr/bin/id | tr " " "\n" | grep "^euid\|^uid" | tr "\n" " "'
 
 announce dived -u -e works 2
-prepare_dived  --chown nobody:0 --effective-user nobody --user root
+prepare_dived  --chown $NOBODY_UID:0 --effective-user nobody --user root
 E=0 V="uid=0(root) euid=$NOBODY_UID(nobody) " t \
     su nobody -c './$DIVE_NAME test_dived /usr/bin/id | tr " " "\n" | grep "^euid\|^uid" | tr "\n" " "'
 
@@ -342,5 +367,7 @@ announce   unsharing pid namespace
 terminate_dived
 ./$DIVED_NAME test_dived  --detach --pidfile test_dived.pid  --unshare pid --no-wait --no-fork
 DIVE_WAITMODE=2 E=0 V="1" t ./$DIVE_NAME test_dived  bash -c 'echo $$'
+    
+fi # TESTS_NO_ROOT
     
 exit $STATUS 
