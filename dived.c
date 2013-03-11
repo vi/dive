@@ -557,9 +557,6 @@ int main(int argc, char* argv[], char* envp[]) {
         }
     }
     
-    if(!opts->nodaemon) daemon(1, 0);
-    
-    
     if (opts->inetd) {
         return serve_client(0, opts);
     }
@@ -646,6 +643,8 @@ int main(int argc, char* argv[], char* envp[]) {
         }
     }
     
+    if(!opts->nodaemon) daemon(1, 0);
+        
     /* Save pidfile */
     if (opts->pidfile){
         FILE* f = fopen(opts->pidfile, "w");
