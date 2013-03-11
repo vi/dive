@@ -878,7 +878,7 @@ int main(int argc, char* argv[], char* envp[]) {
         return 15;
     }
     
-    #ifdef __MUSL__       
+    #ifdef NO_CAPABILITIES       
     if (opts->set_capabilities || opts->retain_capabilities || opts->remove_capabilities) {
         fprintf(stderr, "Capabilities are not supported with musl-gcc\n");
         return 17;
