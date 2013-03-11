@@ -346,7 +346,7 @@ E=0 V="uid=0(root) euid=$NOBODY_UID(nobody) " t \
     su nobody -c './$DIVE_NAME test_dived /usr/bin/id | tr " " "\n" | grep "^euid\|^uid" | tr "\n" " "'
 
 announce "Removing capabilities from bounding set (-B)"
-E=0 V="0000000" t ./$DIVED_NAME -J --retain-capabilities '' -- bash -c "cat /proc/self/status | grep CapBnd | cut -c 18-"
+E=0 V="0000000" t ./$DIVED_NAME -J --retain-capabilities '' -- /bin/sh -c "cat /proc/self/status | grep CapBnd | cut -c 18-"
 
 announce "Removing capabilities from bounding set (-b)"
 E=0 V="0000000" t ./$DIVED_NAME -J \
@@ -365,7 +365,7 @@ E=0 V="0000000" t ./$DIVED_NAME -J \
     
 announce   unsharing pid namespace
 prepare_dived  --unshare pid --no-wait --no-fork
-DIVE_WAITMODE=2 E=0 V="1" t ./$DIVE_NAME test_dived  bash -c 'echo $$'
+DIVE_WAITMODE=2 E=0 V="1" t ./$DIVE_NAME test_dived  /bin/sh -c 'echo $$'
     
 fi # TESTS_NO_ROOT
     
