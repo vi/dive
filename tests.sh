@@ -364,8 +364,7 @@ E=0 V="0000000" t ./$DIVED_NAME -J \
     -- bash -c "cat /proc/self/status | grep CapPrm | cut -c 18-"
     
 announce   unsharing pid namespace
-terminate_dived
-./$DIVED_NAME test_dived  --detach --pidfile test_dived.pid  --unshare pid --no-wait --no-fork
+prepare_dived  --unshare pid --no-wait --no-fork
 DIVE_WAITMODE=2 E=0 V="1" t ./$DIVE_NAME test_dived  bash -c 'echo $$'
     
 fi # TESTS_NO_ROOT
