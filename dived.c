@@ -890,8 +890,6 @@ int main(int argc, char* argv[], char* envp[]) {
         return 18;
     }
     
-    if(!opts->nodaemon) daemon(1, 0);
-    
     if (!opts->inetd && !opts->just_execute) {
     
     struct sockaddr_un addr;
@@ -977,6 +975,8 @@ int main(int argc, char* argv[], char* envp[]) {
     }
     
     } // not --just-execute and not --inetd
+    
+    if(!opts->nodaemon) daemon(1, 0);
     
     /* Save pidfile */
     if (opts->pidfile && !opts->unshare_){
