@@ -939,6 +939,7 @@ int main(int argc, char* argv[], char* envp[]) {
         gid_t targetgid;
         
         char* endnum;
+        errno=0;
         targetuid = strtol(usern, &endnum, 10);
         if (errno || endnum == usern || *endnum) {
             /* not a number */
@@ -950,6 +951,7 @@ int main(int argc, char* argv[], char* envp[]) {
             targetuid = userp->pw_uid;
         }
         
+        errno=0;
         targetgid = strtol(groupn, &endnum, 10);
         if (errno || endnum == groupn || *endnum) {
             struct group *groupp = getgrnam(groupn);
