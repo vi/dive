@@ -1,0 +1,171 @@
+.TH DIVE 1 2013-03-12 v1.2
+
+.SH NAME
+
+dive - connect to
+.BR dived (1)
+and start program remotely
+
+.SH SYNOPSIS
+
+.BI "dive " "socket_path [program arguments]"
+
+.BI "dive @" "abstract_address [program arguments]"
+
+.SH DESCRIPTION
+
+This program connects to AF_UNIX socket created by
+.BR dived (1)
+and requests it to start program.
+
+.P
+By default file descriptors, command-line arguments, envrironment variables,
+umask, current directory and controlling terminal are transferred to the
+remote program, mimicing the behaviour as if the program were just launched
+with
+.BR execve (2)
+\[char46]
+
+.P
+Primary use case of the program is to launch programs inside
+.BR unshare (1)
+/
+.BR lxc (1)
+containers from outside easily and without network connection.
+
+.SH OPTIONS
+
+The first argument must be the socket path
+or abstract socket name, prepended with '@'.
+
+All the rest command line arguments are sent to server.
+Unless the server forces the beginning of command line,
+the first of these arguments is the name of the program to execute.
+
+.SH ENVIRONMENT
+
+Note that all DIVE_* envrironment variables are discarded by the server.
+
+.TP
+.B DIVE_CURDIR
+Open and send the descriptor of specified directory to be current directory
+for the program we are starting remotely.
+
+.TP
+.B DIVE_ROOTDIR
+Open and send the descriptor of specified directory to be root directory.
+Setting the root directory is not enabled by default.
+
+.TP
+.B DIVE_TERMINAL
+Open the given file
+(or use the gived file descritor, if prepended with '@')
+and send it to server to be controlling terminal for the program we are starting.
+By default stdin is used. You can specify @-1 or empty value if you don't want
+dived to touch your controlling terminal.
+
+.TP
+.B DIVE_WAITMODE
+If set to 0 (normal waiting), dive tries explicitly wait for the remote program's exit code
+and preserve it when exiting.
+If set to 1 (no waiting), dive starts the program and does not wait for anything, just exits.
+If set to 2 (workaround waiting), dive opens one additional file descitor and waits for all programs
+that holds it go away, then exits.
+
+By default it is 0. If the server refuses to do normal waiting for use, dive automatically
+switches to workaround waiting.
+
+.SH EXIT STATUS
+By default the exit status should be the same as remote program's exit status.
+
+.TP
+.B 0
+Successfull operation.
+
+.TP
+.B 1
+Can't create socket or if remote program exited with 1.
+
+.TP
+.B 2
+Can't connect socket or if remote program exited with 2.
+
+.TP
+.B 3
+Incompatible dive and dived versions or if remote program exited with 3.
+
+.TP
+.B 127
+Server dropped connection, specified command not found or the remote program exited with 127.
+
+
+.SH EXAMPLES
+
+.TP 
+.BI dive   " /var/run/dive.socket /bin/bash -i"
+Open remote shell.
+
+.TP
+.BI HOME= "/home/user " USER=  "user "  "dive "   "/var/run/user.dive /bin/bash -i"
+Open remote shell expecting that we will get 
+.I user
+\'s shell.
+
+.TP
+.BI "DIVE_TERMINAL="   " "  "DIVE_WAITMODE=" "1 "   "dive "  "@userdive xterm"
+Start xterm remotely in background (using abstract socket address "@userdive" to send the request)
+
+.TP
+.BI "dive " "/var/run/pinger.dive " ""  "-c 1 8.8.8.8"
+Supply arguments for remote ping.
+
+.TP
+See additional examples at http://vi.github.com/dive/
+
+
+.SH CAVEATS
+Obviously the parent process of the remotely started program will not be
+the same as if we started the program directly.
+
+Another issue is a controlling terminal.
+Either dived "steals"
+controlling terminal from your current shell in favour of the new one (default
+if dived started as root) or the new (remotely started) shell does not control
+the terminal ("bash: no job control in this shell").
+
+.P
+Dealing with "stolen" controlling terminal. This way everything appears to be fine
+unless we exit from the remotely started shell. We find that now we can't use
+Ctrl+C (because of we have taken away controlling terminal from your bash
+and gave it to remotely started bash that is now gone). You can restore
+normal shell behaviour by 1. Just "exec bash", 2. Closing this virtual terminal
+and forgetting about the issue (or using "exec dive ..." to avoid triggering it),
+3. Not letting away our terminal (using DIVE_TERMINAL) and using methods from
+the next paragraph. 4. Create temporary virtual terminal and let it be used for dive:
+
+.TP
+.BI "reptyr -L dive " "/var/run/user.dive /bin/bash -i"
+
+
+.P
+Dealing with "missing" controlling terminal. This happens when remote dived is
+not privileged enough or not configured to manage controlling terminals around.
+Easiest way have convenient shell access with job control is to use fresh new pty
+instead of reusing current terminal.
+This can be obtained by wrapping you program with reptry or socat.
+
+.TP
+.BI "dive " "/var/run/user.dive " "reptyr -L"  "bash -i"
+Open remote shell wrapped in 
+.BR reptyr (1)
+version not less than 0.4.
+
+.TP
+.BI "dive " "/var/run/user.dive " "socat -,raw,echo=0 exec:bash,pty,setsid,stderr"
+Use socat for the same purpose (I have issues with terminal width this way).
+
+.SH AUTHOR
+Vitaly "_Vi" Shukela
+
+.SH AVAILABILITY
+Source code is available at https://github.com/vi/dive
