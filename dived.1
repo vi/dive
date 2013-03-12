@@ -79,32 +79,61 @@ combining supported). Option's arguments are the next argv element
 (no "--long-option=argument" supported, use "--long-option argument").
 
 "--"  stops option parsing and starts "forced command-line arguments", which limits
-what can be executed with dived.
+what can be executed with dived. That way you specify the beginning of command line,
+and the remote user specifies the ending.
 
-              
 
-                             
+
+
 .TP
 .B -A, --no-argv
-Don't let client set [part of] command line
+Don't let client set [part of] command line.
+Should be used with "-- forced command line arguments".
 
-              
+Example:
+
+dived qqq -A -- /sbin/shutdown -s now
+
+dive qqq this is ignored
+
+
 .TP
 .B -a, --authenticate
 start this program for authentication
 The program is started using "system" after file descriptors are received
 from client, but before everything else (root, current dir, environment) is received.
 Nonzero exit code => rejected client.
+
+DIVE_* environment variables are also available for the program. The program is 
+expected to ask password, check user id or log the event.
+
+The program is started as dived user, before any setuids.
+
+Example:
+
+dived /var/run/givemeroot.dive -C 777 -P -a 'user=root /root/askpassword'
+
+gives the connected user root access if it enters the correct password
+
+
     
 .TP
 .B -B, --retain-capabilities
 Remove all capabilities from bounding set          
 except of specified ones
-                                   
+
+Example:
+
+dived -J -B cap_net_raw -- /bin/ping 127.0.0.1
+
+
 .TP
 .B -b, --remove-capabilities 
 Remove the selected capabilities from bounding set
 
+dived -J -b cap_net_raw -- /bin/ping 127.0.0.1
+
+ping: icmp open socket: Operation not permitted
     
 .TP
 .B -C, --chmod
@@ -113,7 +142,16 @@ chmod the socket to this mode (like '0777')
 
 .TP
 .B -c, --set-capabilities 
-cap_set_proc this
+Use libcap to interpret the specified string as capabilities set and apply it
+
+Example:
+
+cp /bin/ping /root/ping
+
+setcap cap_net_raw+ei /root/ping
+
+dived -J -c 'cap_net_raw+i' -u nobody -- /root/ping 127.0.0.1
+
   
 .TP
 .B -d, --detach
@@ -129,13 +167,18 @@ one, causing weird behaviour.
 
 .TP
 .B -e, --effective-user   
-seteuid to this user instead of the client
+Set effective user ID to this user instead of SO_PEERCRED-obtained uid.
+
+Note that other groups can be preserved in this mode.
 
   
 .TP
 .B -E, --no-environment   
-Don't let client set environment variables
-          
+Don't let client set any environment variables.
+The environment of the started programs will be the same as current environment.
+
+By default dived only rejects DIVE_* environment variables.
+
 
 .TP
 .B -F, --no-fork
@@ -143,14 +186,9 @@ Accept once, serve only one client. Useful for debugging or for starting the
 requested process with pid=1 in PID namespace.
 
 
-
-
 .TP
 .B -H, --no-chdir         
 Don't let client set current directory
-          
-          
-                                   
 
 
 .TP
@@ -164,116 +202,139 @@ Example /etc/inetd.conf configuration line:
 This allows anybody who can access /var/run/qqq.dive to run commands as user qqq.
 
 
-
 .TP
 .B -J, --just-run
 Don't use the socket at all (don't receive file descriptors, argv, environment),
 just start (execve) the program right away.
 
 
-
-
-
-           
 .TP
 .B  -L, --lock-securebits  
 set and lock SECBIT_NO_SETUID_FIXUP and SECBIT_NOROOT
-          
 
-                                             
+This makes root user (uid=0) non-special for the kernel. 
+To be used in conjunction with capabilities (-B and -c options).
+
+
 .TP
 .B -M, --no-umask        
 Don't let client set umask
-          
-                                   
+
+ 
 .TP
 .B -n, --signals          
 Transfer all signals from dive
-          
+
+By default dived tells the PID of launched process to dive and it tries to deliver
+signals to the started process by itself (should be OK unless we are overriding
+user with -u, -e or -P).
+
+With -n option dived accepts signals from the client and helps delivering them to
+the started program. This way unprivileged user can be allowed to send signals
+to dived-started programs.
 
 
 .TP
 .B -O, --no-fds          
 Don't let client set file descriptors
-          
 
 
 .TP
 .B -p, --pidfile          
 save PID to this file
-          
 
 
 .TP
 .B -P, --no-setuid
+Don't mess with user/group/capabilities things at all, just start the program.
 
+-a option will still work like expected although.
 
 
 .TP
 .B -R, --chroot           
 chroot to this directory 
 Note that current directory stays on unchrooted filesystem; use -W option to prevent.
-          
-                            
+
+pidfile is saved unchrooted.
+
 .TP
 .B -r, --client-chroot    
 Allow arbitrary chroot from client
 
+By default dive always send the intended root directory descriptor, but dived
+ignores it. With this options we actually chroot to where client wants.
 
+Use -X or -B '' options to disable starting any setuid-bit things after such chroot.
 
 .TP
 .B -s, --unshare          
-Unshare this (comma-separated list); also detaches
-ipc,net,fs,pid,uts
-
-
-    
+Unshare the specified namespaces.
+Known namespaces: ipc,net,fs,pid,uts
 
 .TP
 .B -S, --no-setsid
 no setsid
-          
-                                   
+
+Don't do:
+
+setpgid(0, getppid());
+
+setsid();
+
 .TP
 .B -T, --no-csctty        
-no ioctl TIOCSCTTY
-          
-                                   
+Don't do: 
 
-                                   
+ioctl (terminal_fd_received_from_client, TIOCSCTTY, 1);
+
+
 .TP
 .B -U, --chown            
 chown the socket to this user:group
-          
-                                   
 
-                                   
-                                   
+Both user and group must be specified. They can be numeric.
+
 .TP
 .B  -u, --user
-setuid to this user instead of the client
-       
-          
-                                   
+setuid to this user instead of the client's SO_PEERCRED-obtained uid.
+
+
+
 .TP
 .B -W, --root-to-current  
 Set server's root directory as current directory
 (implies -H; useful with -r)
-          
-                                   
-          
+
+
+Assist inspection of container's filesystem using host's utilities
+(if it is not visible directly).
+
+Example:
+
+dived /var/run/some_socket_on_shared_fs  -U 0:0 -C 700    -W -r
+
+dive /mnt/container/var/run/some_socket_on_shared_fs bash
+
+than have /mnt/container/ as current directory, but hosts's / as root; other
+filesystems mounted in container visible.
+
 
 .TP
 .B -w, --no-wait          
 Don't fork and wait for exit code
 
-                        
+Only setup things and execve program, don't fork and wait to report program
+completion to the client.
+
+
 .TP
 .B -X, --no-new-privs     
 set PR_SET_NO_NEW_PRIVS
 
+Deny elevating privileges using setuid-bit or filesystem capabilities.
 
-
+Requires new enough Linux kernel.
 
 
 .SH ENVIRONMENT
