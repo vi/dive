@@ -12,6 +12,7 @@ install:
 	install -m 755 dive ${prefix}/bin/
 	install -m 755 dived ${prefix}/bin/
 	install -m 644 dive.1 ${prefix}/share/man/man1/
+	install -m 644 dived.1 ${prefix}/share/man/man1/
 	
 deb: dived dive
 	fakeroot ./makedeb.sh
