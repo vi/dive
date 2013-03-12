@@ -1,10 +1,10 @@
 all: dived dive
 	
 dived: recv_fd.h recv_fd.c dived.c safer.o
-	${CC} ${CFLAGS} -Wall -g -lcap recv_fd.c dived.c safer.o -o dived
+	${CC} ${CFLAGS} -Wall -g -lcap recv_fd.c dived.c safer.o ${LDFLAGS} -o dived
 
 dive: send_fd.h send_fd.c dive.c safer.o
-	${CC} ${CFLAGS} -Wall -g send_fd.c dive.c safer.o -o dive
+	${CC} ${CFLAGS} -Wall -g send_fd.c dive.c safer.o ${LDFLAGS} -o dive
 
 prefix=/usr/local
 
