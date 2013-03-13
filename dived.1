@@ -371,7 +371,7 @@ to as if users are starting them directly (without dive/dived). Detach and
 save pidfile. chmod the /var/run/socket.dive to 777.
 
 .B dived /var/run/socket.dive -U 0:chrooters -r -X
-
+.br
 .B dived /var/run/socket.dive -U 0:chrooters -r -B ''
 
 Allow users in group "chrooters" chroot into arbitrary directory securely 
@@ -391,12 +391,16 @@ Open a shell where uid=0 does not have any special privileges
 
 
 .B dived  /var/run/container_admin.dive -T --unshare pid,fs,net,uts,ipc -d
-
+.br
 .B dive /var/run/container_admin.dive /bin/mount -t proc proc /mnt/container/proc
-
+.br
 .B dive /var/run/container_admin.dive /sbin/ifconfig  lo up
-
-.B dive /var/run/container_admin.dive dived /var/run/container_user.dive -d -T -B 'CAP_CHOWN,CAP_DAC_OVERRIDE,CAP_DAC_READ_SEARCH,CAP_FOWNER,CAP_FSETID,CAP_IPC_OWNER,CAP_KILL,CAP_NET_BIND_SERVICE,CAP_NET_RAW,CAP_SETGID,CAP_SETUID' -R /mnt/container
+.br
+.B dive /var/run/container_admin.dive dived /var/run/container_user.dive -d -T 
+.br
+    -B CAP_CHOWN,CAP_DAC_OVERRIDE,CAP_DAC_READ_SEARCH,CAP_FOWNER,CAP_FSETID,CAP_IPC_OWNER,
+.br
+    CAP_KILL,CAP_NET_BIND_SERVICE,CAP_NET_RAW,CAP_SETGID,CAP_SETUID -R /mnt/container
 
 Start and set up a sort of a container. Create special restriced root login for it.
 
