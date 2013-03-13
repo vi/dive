@@ -99,7 +99,7 @@ dive qqq this is ignored
 
 .TP
 .B -a, --authenticate
-start this program for authentication
+Start this program for authentication.
 The program is started using "system" after file descriptors are received
 from client, but before everything else (root, current dir, environment) is received.
 Nonzero exit code => rejected client.
@@ -362,25 +362,79 @@ Is set of the username of connected client
 Note that any client's DIVE_* environment variables are discarded.
 
 
-
-
-.SH EXIT STATUS
-(stub)
-
-
-
 .SH EXAMPLES
-(stub)
+
+.B dived /var/run/socket.dive -C 777 -d -p /var/run/socket.pid
+
+Run dived that will just allow users to start programs in a way the most similar
+to as if users are starting them directly (without dive/dived). Detach and
+save pidfile. chmod the /var/run/socket.dive to 777.
+
+.B dived /var/run/socket.dive -U 0:chrooters -r -X
+
+.B dived /var/run/socket.dive -U 0:chrooters -r -B ''
+
+Allow users in group "chrooters" chroot into arbitrary directory securely 
+(turn off any privilege elevation using suid-bit or filesystem capabilities)
+
+
+.B dived @without_network -C 777 --unshare net
+
+Allow anybody run their programs without network access 
+(i.e. in a separate unconfigured network namespace).
+
+
+.B dived -J -T -S -P    -L   -- /bin/bash -i
+
+Open a shell where uid=0 does not have any special privileges 
+(according to Linux kernel)
+
+
+.B dived  /var/run/container_admin.dive -T --unshare pid,fs,net,uts,ipc -d
+
+.B dive /var/run/container_admin.dive /bin/mount -t proc proc /mnt/container/proc
+
+.B dive /var/run/container_admin.dive /sbin/ifconfig  lo up
+
+.B dive /var/run/container_admin.dive dived /var/run/container_user.dive -d -T -B 'CAP_CHOWN,CAP_DAC_OVERRIDE,CAP_DAC_READ_SEARCH,CAP_FOWNER,CAP_FSETID,CAP_IPC_OWNER,CAP_KILL,CAP_NET_BIND_SERVICE,CAP_NET_RAW,CAP_SETGID,CAP_SETUID' -R /mnt/container
+
+Start and set up a sort of a container. Create special restriced root login for it.
+
+Note: currently dived is not tested enough to serve well as a container's init process.
+
+
+.B dived /var/run/alice4bob -u alice -U bob:0 -a 'exit $RANDOM'
+
+Allow user bob to run commands as alice (but only when he's lucky enough).
+
 
 .TP
 See additional examples at http://vi.github.com/dive/
 
 
 .SH CAVEATS
-(stub)
+
+Some dived features (-X, for example) require recent enough Linux kernel.
+Other behaviour can vary a bit between versions of Linux kernel.
+
+When using --unshare pid, dived can tall dive that it's pid is 1. dive (if run
+as root) can "kill -INT 1" accidently, causing system reboot.
+
+Although dived sets up groups using 
+.BR initgroups (3)
+, it does not set all user PAM settings like resource usage limits.
+
+You need to understand what is exactly happening to use dived securely
+(especially as root). For example,
+
+dived @socket -P   -- chroot /some/root  su -l someuser
+
+is not secure (because of user can set PATH and LD_whatever before we execute binaries).
 
 .SH AUTHOR
 Vitaly "_Vi" Shukela
 
 .SH AVAILABILITY
+The program is intended to be used with Linux primarily.
+
 Source code is available at https://github.com/vi/dive
