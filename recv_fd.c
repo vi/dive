@@ -5,6 +5,8 @@
 #define NULL ((void *) 0)
 #endif
 
+// http://www.thomasstover.com/uds.html
+
 int recv_fd(int socket)
  {
   int sent_fd;

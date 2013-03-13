@@ -32,9 +32,12 @@ Upstream-Name: dive
 Upstream-Contact: Vitaly "_Vi" Shukela <vi0oss@gmail.com>
 Source: https://github.com/vi/dive
 
-Files: *
+Files: dive.c dived.c
 Copyright: 2012-2013 Vitaly Shukela
 License: MIT
+
+Files: recv_fd.c send_fd.c
+Copyright: 2006 - 2012 C. Thomas Stover
 
 License: MIT
  Permission to use, copy, modify, distribute, and sell this software and its
