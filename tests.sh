@@ -250,7 +250,7 @@ announce 'Can we test with inetd? (inetd and socat works)'
 inetd -i <(echo 'test_dived stream unix nowait vi  /bin/echo echo qqq')&
 INETD_PID=$!
 sleep 0.1
-E=0 V='qqq' t socat unix-connect:test_dived  -
+E=0 MF=1 V='qqq' t socat unix-connect:test_dived  -
 kill $INETD_PID
 
 terminate_dived
@@ -259,7 +259,7 @@ announce 'Testing --inetd mode'
 inetd -i <(echo "test_dived stream unix nowait vi  ./$DIVED_NAME dived -i -T -P")&
 INETD_PID=$!
 sleep 0.1
-E=0 V='qqq' t ./$DIVE_NAME test_dived /bin/echo qqq
+E=0 MF=1 V='qqq' t ./$DIVE_NAME test_dived /bin/echo qqq
 kill $INETD_PID
 
 fi # TESTS_NO_USER
@@ -346,26 +346,26 @@ E=0 V="uid=0(root) euid=$NOBODY_UID(nobody) " t \
     su nobody -c './$DIVE_NAME test_dived /usr/bin/id | tr " " "\n" | grep "^euid\|^uid" | tr "\n" " "'
 
 announce "Removing capabilities from bounding set (-B)"
-E=0 V="0000000" t ./$DIVED_NAME -J --retain-capabilities '' -- /bin/sh -c "cat /proc/self/status | grep CapBnd | cut -c 18-"
+E=0 MF=1 V="0000000" t ./$DIVED_NAME -J --retain-capabilities '' -- /bin/sh -c "cat /proc/self/status | grep CapBnd | cut -c 18-"
 
 announce "Removing capabilities from bounding set (-b)"
-E=0 V="0000000" t ./$DIVED_NAME -J \
+E=0 MF=1  V="0000000" t ./$DIVED_NAME -J \
     --remove-capabilities '0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28' \
     -- bash -c "cat /proc/self/status | grep CapBnd | cut -c 18-"
     
 announce "Adding an inherited capability"
-E=0 V="0000800" t ./$DIVED_NAME -J \
+E=0 MF=1 V="0000800" t ./$DIVED_NAME -J \
     --set-capabilities '11+i' \
     -- bash -c "cat /proc/self/status | grep CapInh | cut -c 18-"
 
 announce "--lock-securebits"
-E=0 V="0000000" t ./$DIVED_NAME -J \
+E=0 MF=1 V="0000000" t ./$DIVED_NAME -J \
     --lock-securebits \
     -- bash -c "cat /proc/self/status | grep CapPrm | cut -c 18-"
     
 announce   unsharing pid namespace
 prepare_dived  --unshare pid --no-wait --no-fork
-DIVE_WAITMODE=2 E=0 V="1" t ./$DIVE_NAME test_dived  /bin/sh -c 'echo $$'
+DIVE_WAITMODE=2 MF=1 E=0 V="1" t ./$DIVE_NAME test_dived  /bin/sh -c 'echo $$'
     
 fi # TESTS_NO_ROOT
     
