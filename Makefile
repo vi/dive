@@ -1,12 +1,16 @@
 -include config.mak
+-include config.mak2
 
 all: dived dive
 	
-dived: recv_fd.h recv_fd.c dived.c safer.o
+dived: recv_fd.h recv_fd.c dived.c safer.o config.h
 	${CC} ${CFLAGS} ${CPPFLAGS} -Wall -g -lcap recv_fd.c dived.c safer.o ${LDFLAGS} -o dived
 
-dive: send_fd.h send_fd.c dive.c safer.o
+dive: send_fd.h send_fd.c dive.c safer.o config.h
 	${CC} ${CFLAGS} ${CPPFLAGS} -Wall -g send_fd.c dive.c safer.o ${LDFLAGS} -o dive
+
+config.h:
+	./configure
 
 
 # install to DESTDIR/usr/ whenn called from debuild, 
@@ -44,4 +48,5 @@ dist:
 	./makedist.sh
 
 clean:
-	rm -f dive dived *.o
+	rm -f dive dived *.o config.h
+

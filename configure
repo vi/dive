@@ -1,9 +1,15 @@
 #!/bin/bash
 
-rm config.mak
+rm -f config.mak2
+rm -f config.h
+
+echo > config.h
+
 
 for i in "$@"; do
     if [ "${i/FLAGS=//}" != "$i" ]; then 
-        echo "$i" >> config.mak
+        echo "$i" >> config.mak2
     fi
 done
+
+gcc -E -o /dev/null -x c - <<< '#include <linux/securebits.h>' || echo "#define SECUREBITS_WORKAROUND" >> config.h

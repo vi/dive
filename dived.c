@@ -21,9 +21,16 @@
 #include <sys/select.h>
 #include <sys/signalfd.h>
 
+#include "config.h"
+
 #ifndef NO_CAPABILITIES   
-#include <sys/capability.h>
-#include <linux/securebits.h>
+    #include <sys/capability.h>
+    #ifndef SECUREBITS_WORKAROUND
+        #include <linux/securebits.h>
+    #else
+        // build supporting this feature even if system does not support it yet
+        #include "hacks/securebits.h"
+    #endif
 #endif
 
 #include <sys/prctl.h>
