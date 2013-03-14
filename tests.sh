@@ -41,7 +41,6 @@ function t() {
         else
             echo "fail soft; val=$VAL"
         fi
-        STATUS=1
         return 1
     fi
     
