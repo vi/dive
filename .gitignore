@@ -4,3 +4,5 @@ dive
 dive_musl
 dived_musl
 pages
+dist/
+config.mak

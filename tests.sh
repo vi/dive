@@ -117,11 +117,11 @@ E=0 V='' DIVE_QQQ=12345 t ./$DIVE_NAME test_dived /bin/sh -c 'echo $DIVE_QQQ'
 
 announce    DIVE_USER
 prepare_dived
-E=0 V=$USER t ./$DIVE_NAME test_dived /bin/sh -c 'echo $DIVE_USER'
+E=0 V=`id -un` t ./$DIVE_NAME test_dived /bin/sh -c 'echo $DIVE_USER'
 
 announce    DIVE_USER -E
 prepare_dived --no-environment
-E=0 V=$USER t ./$DIVE_NAME test_dived /bin/sh -c 'echo $DIVE_USER'
+E=0 V=`id -un` t ./$DIVE_NAME test_dived /bin/sh -c 'echo $DIVE_USER'
 
 announce    DIVE_UID
 prepare_dived

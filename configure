@@ -1,0 +1,9 @@
+#!/bin/bash
+
+rm config.mak
+
+for i in "$@"; do
+    if [ "${i/FLAGS=//}" != "$i" ]; then 
+        echo "$i" >> config.mak
+    fi
+done
