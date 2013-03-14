@@ -14,7 +14,7 @@ Section: utils
 Installed-Size: 32
 Maintainer: Vitaly "_Vi" Shukela <vi0oss@gmail.com>
 Architecture: i386
-Version: $VERSION.0-1
+Version: $VERSION-1
 Provides: dive
 Recommends: reptyr(>=0.4)
 Depends: libcap2, libc6 (>= 2.11)
