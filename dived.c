@@ -102,7 +102,11 @@ int serve_client(int fd, struct dived_options *opts) {
     int exit_code_or_signal_processing_enabled = opts->fork_and_wait_for_exit_code && !opts->just_execute;
 
     if (opts->chroot_) {
-        chroot(opts->chroot_);
+        int ret = chroot(opts->chroot_);
+        if (ret==-1) {
+            perror("chroot");
+            return 23;
+        }
     }
     
     struct ucred cred;
