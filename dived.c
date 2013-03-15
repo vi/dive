@@ -668,6 +668,19 @@ int serve_client(int fd, struct dived_options *opts) {
 
 
 
+void serve_sigchild(int something) {
+    // Note: there are multiple SIGCHLD handlers thought the dived code
+    // this is is for case when -J or -F or --inetd options are not in use.
+    
+    // Here also orphaned processes get rebased when "--unshare pid" is in use.
+
+    int status;
+    for (;;) {
+        int ret = waitpid(-1, &status, WNOHANG);
+        if (ret==0 || ret == -1) break;
+    }
+    (void)status;
+}
 
 int serve(struct dived_options* opts) {
     if (opts->inetd) {
@@ -675,6 +688,14 @@ int serve(struct dived_options* opts) {
     } 
     if (opts->just_execute) {
         return serve_client(-1, opts);
+    }
+    
+    {
+        struct sigaction sa = {{&serve_sigchild}};
+        int ret = sigaction(SIGCHLD, &sa, NULL);
+        if (ret == -1) {
+            perror("sigaction");
+        }
     }
     
     int sock = opts->sock;
