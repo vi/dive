@@ -1,0 +1,147 @@
+bash tests.sh
+Dummy dived call                                   OK 
+Dummy dive call                                    OK 
+dived -J simple test                              FAIL code=1
+dived -J return code                              FAIL code=1
+dived -J print                                    FAIL code=1
+dive and dived echo                                OK 
+dive and dived echo (dived -n)                    Unknown HZ value! (94) Assume 100.
+Unknown argument --signals
+FAIL code=2
+dive and dived return code                        FAIL code=0
+dive and dived return code (dived -n)             Unknown HZ value! (94) Assume 100.
+Unknown argument --signals
+FAIL code=2
+Preserve environment                               OK 
+No preserve environment if -E                     Unknown HZ value! (94) Assume 100.
+ OK 
+No preserve DIVE_* environment                    Unknown HZ value! (94) Assume 100.
+ OK 
+DIVE_USER                                         Unknown HZ value! (94) Assume 100.
+FAIL
+expected: root
+actual:   
+DIVE_USER -E                                      Unknown HZ value! (94) Assume 100.
+FAIL
+expected: root
+actual:   
+DIVE_UID                                          Unknown HZ value! (94) Assume 100.
+FAIL
+expected: 0
+actual:   1
+DIVE_PID                                          Unknown HZ value! (94) Assume 100.
+FAIL code=0
+High fd redirection                               Unknown HZ value! (94) Assume 100.
+ OK 
+dived -O option                                   Unknown HZ value! (94) Assume 100.
+FAIL code=0
+Current directory preservation                    Unknown HZ value! (94) Assume 100.
+ OK 
+No current directory preservation if dived -H     Unknown HZ value! (94) Assume 100.
+ OK 
+Prepended args test                               Unknown HZ value! (94) Assume 100.
+ OK 
+Prepended args test with dived -A                 Unknown HZ value! (94) Assume 100.
+ OK 
+Umask preservance                                 Unknown HZ value! (94) Assume 100.
+ OK 
+No umask preservance if dived -M                  Unknown HZ value! (94) Assume 100.
+ OK 
+No stray FDs                                      Unknown HZ value! (94) Assume 100.
+/bin/ls: cannot access /proc/self/fd/: No such file or directory
+ OK 
+No stray FDs (dived -n)                           Unknown HZ value! (94) Assume 100.
+Unknown argument --signals
+/bin/ls: cannot access /proc/self/fd/: No such file or directory
+FAIL code=2
+dived -X option supported                         fail soft; code=1
+ping works                                         OK 
+ping fails when from dived -X                      OK 
+signal delivery without --signals                 FAIL
+expected: qqq
+actual:   
+signal delivery with --signals                    Unknown HZ value! (94) Assume 100.
+Unknown argument --signals
+FAIL code=2
+simple --authenticate test                         OK 
+failed authentication test                        Unknown HZ value! (94) Assume 100.
+ OK 
+no pwd, env or umask is preserved for auth prog   Unknown HZ value! (94) Assume 100.
+ OK 
+signals are not delivered to auth prog            Unknown HZ value! (94) Assume 100.
+Unknown argument --signals
+fail soft; val=
+DIVE_WAITMODE=0 works                              OK 
+DIVE_WAITMODE=1 works                             Unknown HZ value! (94) Assume 100.
+FAIL
+expected: qqqwww
+actual:   wwwqqq
+DIVE_WAITMODE=2 works                             Unknown HZ value! (94) Assume 100.
+ OK 
+DIVE_WAITMODE=0 with dived -w works               Unknown HZ value! (94) Assume 100.
+Unknown argument --no-wait
+FAIL
+expected: wwwqqq
+actual:   qqq
+DIVE_WAITMODE=1 with dived -w works               Unknown argument --no-wait
+FAIL
+expected: qqqwww
+actual:   qqq
+DIVE_WAITMODE=2 with dived -w works               Unknown argument --no-wait
+FAIL
+expected: wwwqqq
+actual:   qqq
+Can we test with inetd? (inetd and socat works)   tests.sh: line 249: inetd: command not found
+fail soft; code=127
+tests.sh: line 253: kill: (9550) - No such process
+Testing --inetd mode                              tests.sh: line 258: inetd: command not found
+fail soft; code=2
+tests.sh: line 262: kill: (9556) - No such process
+NOBODY_UID=65534
+can we change to other user?                       OK 
+dived --chown option                               OK 
+dived --chown name option                         Unknown HZ value! (94) Assume 100.
+ OK 
+dived --chmod option                              Unknown HZ value! (94) Assume 100.
+ OK 
+dived --chown option actual                       Unknown HZ value! (94) Assume 100.
+ OK 
+dived --chown name option actual                  Unknown HZ value! (94) Assume 100.
+FAIL code=206
+dived --chmod option actual                       Unknown HZ value! (94) Assume 100.
+ OK 
+dived preserve user by default                    Unknown HZ value! (94) Assume 100.
+FAIL
+expected: 65534
+actual:   1
+dived sets up groups                              Unknown HZ value! (94) Assume 100.
+FAIL
+expected: uid=65534(nobody) gid=65534(nogroup) groups=65534(nogroup)
+actual:   uid=1(daemon) gid=1153 groups=1153
+dived -P does not touch things                    Unknown HZ value! (94) Assume 100.
+ OK 
+dived -u works                                    Unknown HZ value! (94) Assume 100.
+ OK 
+dived -u works 2                                  Unknown HZ value! (94) Assume 100.
+ OK 
+dived -e works                                    Unknown HZ value! (94) Assume 100.
+FAIL
+expected: uid=65534(nobody) euid=0(root) 
+actual:   uid=1(daemon) euid=0(root) 
+dived -u -e works                                 Unknown HZ value! (94) Assume 100.
+ OK 
+dived -u -e works 2                               Unknown HZ value! (94) Assume 100.
+ OK 
+Removing capabilities from bounding set (-B)      --just-execute option is not supported in 'nocreep' edition
+fail soft; code=1
+Removing capabilities from bounding set (-b)      --just-execute option is not supported in 'nocreep' edition
+fail soft; code=1
+Adding an inherited capability                    --just-execute option is not supported in 'nocreep' edition
+fail soft; code=1
+--lock-securebits                                 --just-execute option is not supported in 'nocreep' edition
+fail soft; code=1
+unsharing pid namespace                           Unknown HZ value! (94) Assume 100.
+Unsharing namespaces is not supported in 'nocreep' edition of dived
+connect: No such file or directory
+fail soft; code=2
+make: *** [test] Error 1
