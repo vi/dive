@@ -144,7 +144,13 @@ int serve_client(int fd, struct dived_options *opts) {
 
     //printf("pid=%ld, euid=%ld, egid=%ld\n", (long) cred.pid, (long) cred.uid, (long) cred.gid);
     
-    if(!opts->nochilddaemon) daemon(0,0);
+    if(!opts->nochilddaemon) {
+        int ret = daemon(0,0);
+        if (ret==-1) {
+            perror("daemon");
+            // considering this error as non-important and not exiting
+        }
+    }
     
     int terminal_fd = -1;
     
@@ -220,7 +226,7 @@ int serve_client(int fd, struct dived_options *opts) {
     /* Receive and apply root directory */
     int rootdir = recv_fd(fd);
     if (opts->client_chroot) {
-        DIR* curdir;
+        DIR* curdir = NULL;
         if (!opts->client_chdir) {
             if (opts->root_to_current) {
                 curdir = opendir("/");
@@ -229,12 +235,23 @@ int serve_client(int fd, struct dived_options *opts) {
             }
         }
         
-        fchdir(rootdir);
-        chroot(".");
+        int ret = fchdir(rootdir);
+        if (ret==-1) {
+            perror("fchdir");
+            /* Inability to do client-managed chroot is not a security error, so continuing */
+        } else {
+            ret = chroot(".");
+            if (ret==-1) {
+                perror("chroot");
+            }
+        }
         close(rootdir);
         
         if (!opts->client_chdir) {
-            fchdir(dirfd(curdir));
+            ret = fchdir(dirfd(curdir));
+            if (ret==-1) {
+                perror("fchdir");
+            }
             closedir(curdir);
         }        
     }
@@ -243,10 +260,21 @@ int serve_client(int fd, struct dived_options *opts) {
     /* Receive and apply current directory */
     int curdir = recv_fd(fd);
     if (!opts->root_to_current) {
-        if (opts->client_chdir) fchdir(curdir);
+        if (opts->client_chdir) {
+            int ret = fchdir(curdir);
+            if (ret==-1) {
+                perror("fchdir");
+                /* Not considering preservance of current directory instead 
+                    of client-choosed one as a security issue, continuing */
+            }
+        }
     } else {
         if (!opts->client_chroot) {
-            chdir("/");
+            int ret = chdir("/");
+            if (ret==-1) {
+               perror("chdir");
+               return 23; 
+            }
         }
     }
     close(curdir);
