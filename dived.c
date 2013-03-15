@@ -595,12 +595,16 @@ int serve_client(int fd, struct dived_options *opts) {
     /* Send executed pid */
     safer_write(fd, (char*)&pid2, sizeof(pid2));
     
-    safer_write(fd, (char*)&opts->signal_processing, sizeof(opts->signal_processing));
+    {
+        int signal_processing_actual = opts->signal_processing;
+        if (signal_fd == -1) signal_processing_actual=0;
+        safer_write(fd, (char*)&signal_processing_actual, sizeof(signal_processing_actual));
+    }
     
     int dive_signal_fd = recv_fd(fd);
     
     int status;
-    if (opts->signal_processing) {
+    if (opts->signal_processing && signal_fd != -1) {
         fcntl(dive_signal_fd, F_SETFL, O_NONBLOCK);
         
         int maxfd = (signal_fd > dive_signal_fd) ? signal_fd  : dive_signal_fd;
