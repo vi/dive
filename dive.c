@@ -17,6 +17,7 @@
 #include  <fcntl.h>
 #include <sys/select.h>
 #include <sys/signalfd.h>
+#include <string.h>
 
 #include "send_fd.h"
 #include "safer.h"

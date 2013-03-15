@@ -20,6 +20,8 @@
 #include <fcntl.h>
 #include <sys/select.h>
 #include <sys/signalfd.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "config.h"
 
