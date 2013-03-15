@@ -460,7 +460,11 @@ int serve_client(int fd, struct dived_options *opts) {
     /* Not caring much about security since that point */
 
     int initialisation_finished_event[2];
-    pipe2(initialisation_finished_event, O_CLOEXEC);
+    ret = pipe2(initialisation_finished_event, O_CLOEXEC);
+    if (ret == -1) {
+        initialisation_finished_event[0]=-1;
+        initialisation_finished_event[1]=-1;
+    }
 
     int signal_fd = -1;
     if (!opts->just_execute) {
@@ -575,7 +579,17 @@ int serve_client(int fd, struct dived_options *opts) {
     }
     
     close (initialisation_finished_event[1]);
-    read(initialisation_finished_event[0], &initialisation_finished_event[1], 1); // will not complete
+    if (initialisation_finished_event[0] != -1) {
+        // will not complete
+        ret = read(initialisation_finished_event[0], &initialisation_finished_event[1], 1); 
+        // ret should be 0
+        (void)ret;
+    } else {
+        //workaround
+        struct timeval to = { 0, 200000};
+        ret = select(0,NULL,NULL,NULL, &to);
+        (void)ret;
+    }
     close(initialisation_finished_event[0]);
         
     /* Send executed pid */
@@ -631,8 +645,8 @@ int serve_client(int fd, struct dived_options *opts) {
         close(dive_signal_fd);
         
         struct signalfd_siginfo si;
-        read(signal_fd, &si, sizeof si);
-        if (si.ssi_pid == pid2 && si.ssi_signo == SIGCHLD) {
+        ret = read(signal_fd, &si, sizeof si);
+        if (ret != -1 && si.ssi_pid == pid2 && si.ssi_signo == SIGCHLD) {
             status = si.ssi_status;
             safer_write(fd, (char*)&si.ssi_status, 4);
             return 0;
@@ -1015,7 +1029,13 @@ int main(int argc, char* argv[], char* envp[]) {
     
     } // not --just-execute and not --inetd
     
-    if(!opts->nodaemon) daemon(1, 0);
+    if(!opts->nodaemon) {
+        int ret = daemon(1, 0);
+        if (ret == -1) {
+            perror("daemon");
+            return 16;
+        }
+    }
     
     /* Save pidfile */
     if (opts->pidfile && !opts->unshare_){
