@@ -1,5 +1,6 @@
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <string.h>
 
 #ifndef NULL
 #define NULL ((void *) 0)

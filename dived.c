@@ -18,6 +18,9 @@
 #include <errno.h>
 #include <dirent.h>
 
+#include <string.h>
+#include <unistd.h>
+
 #include "recv_fd.h"
 #include "safer.h"
 
