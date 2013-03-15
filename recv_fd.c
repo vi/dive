@@ -28,7 +28,7 @@ int recv_fd(int socket)
   socket_message.msg_control = ancillary_element_buffer;
   socket_message.msg_controllen = CMSG_SPACE(sizeof(int));
 
-  if(recvmsg(socket, &socket_message, MSG_CMSG_CLOEXEC) < 0)
+  if(recvmsg(socket, &socket_message, 0) < 0)
    return -1;
 
   if(message_buffer[0] != 'F')
