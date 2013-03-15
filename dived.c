@@ -775,7 +775,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -W --root-to-current  Set server's root directory as current directory\n");
         printf("                                (implies -H; useful with -r)\n");
         printf("          -s --unshare          Unshare this (comma-separated list); also detaches\n");
-        printf("                                ipc,net,fs,pid,uts\n");
+        printf("                                ipc,net,fs,pid,uts,user\n");
         printf("          -p --pidfile          save PID to this file\n");
         printf("          -C --chmod            chmod the socket to this mode (like '0777')\n");
         printf("          -U --chown            chown the socket to this user:group\n");
@@ -1082,6 +1082,7 @@ int main(int argc, char* argv[], char* envp[]) {
             else if (!strcmp(q,"fs" )) flags|=CLONE_NEWNS;
             else if (!strcmp(q,"pid")) flags|=CLONE_NEWPID;
             else if (!strcmp(q,"uts")) flags|=CLONE_NEWUTS;
+            else if (!strcmp(q,"user")) flags|=CLONE_NEWUSER;
             else {
                 fprintf(stderr, "Unknown unshare flag '%s'\n", q);
                 return 21;
