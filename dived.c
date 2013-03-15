@@ -70,7 +70,11 @@ int serve_client(int fd, struct dived_options *opts) {
     int ret;
 
     if (opts->chroot_) {
-        chroot(opts->chroot_);
+        int ret = chroot(opts->chroot_);
+        if (ret==-1) {
+            perror("chroot");
+            return 23;
+        }
     }
     
     struct ucred cred;
