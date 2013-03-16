@@ -24,6 +24,7 @@
 #include "recv_fd.h"
 #include "safer.h"
 
+/* Maximum FD number */
 #define MAXFD 1024
 
 #define VERSION 800
@@ -65,6 +66,12 @@ struct dived_options {
     int client_chroot;
     int root_to_current;
     char* authentication_program;
+    
+    int maximum_fd_count;
+    int maximum_argv_count;
+    int maximum_argv_size;
+    int maximum_envp_count;
+    int maximum_envp_size;
 } options;
 
 
@@ -124,6 +131,7 @@ int serve_client(int fd, struct dived_options *opts) {
     int terminal_fd = recv_fd(fd);
 
     /* Receive and apply file descriptors */
+    int received_fd_count = 0;
     memset(saved_fdnums, 0, sizeof saved_fdnums);
     for(;;) {
         int i;
@@ -135,8 +143,17 @@ int serve_client(int fd, struct dived_options *opts) {
             fprintf(stderr, "dived: Wrong file descriptor number %d\n", i);
             return 7;
         }
-        int f = recv_fd(fd);                
-        if(!opts->client_fds)continue;
+        int f = recv_fd(fd);   
+        if (!opts->client_fds) {
+            close(f);
+            continue;
+        }
+        if (received_fd_count == opts->maximum_fd_count) {
+            fprintf(stderr, "dived: Too many FDs, ignoring %d\n", i);
+            close(f);
+            continue;
+        }
+        ++received_fd_count;
         if(i==fd) {
             /* Move away our socket desciptor */
             int tmp = dup(fd);
@@ -296,12 +313,26 @@ int serve_client(int fd, struct dived_options *opts) {
         int numargs, totallen;
         safer_read(fd, (char*)&numargs, sizeof(numargs));
         safer_read(fd, (char*)&totallen, sizeof(totallen));
+            
+        if (numargs < 0 || numargs > opts->maximum_argv_count ||
+            totallen < 0 || totallen > opts->maximum_argv_size) {
+            fprintf(stderr, "dived: Exceed maximum argv count or size\n");
+            return -1;
+        }
 
         int forced_argv_count = opts->forced_argv_count;
         char* args=(char*)malloc(totallen);
+        if (!args) {
+            perror("malloc");
+            return -1;
+        }
         safer_read(fd, args, totallen);
         if(!opts->client_argv) { numargs=0; totallen=0; }
         char** argv=malloc((numargs+forced_argv_count+1)*sizeof(char*));
+        if (!argv) {
+            perror("malloc");
+            return -1;
+        }
         int i, u;
         for(u=0; u<forced_argv_count; ++u) {
             argv[u] = opts->forced_argv[u];
@@ -320,11 +351,28 @@ int serve_client(int fd, struct dived_options *opts) {
         /* Receive environment */
         safer_read(fd, (char*)&numargs, sizeof(numargs));
         safer_read(fd, (char*)&totallen, sizeof(totallen));
+        
+        if (numargs < 0 || numargs > opts->maximum_envp_count ||
+            totallen < 0 || totallen > opts->maximum_envp_size) {
+            fprintf(stderr, "dived: Exceed maximum environment count or size\n");
+            return -1;
+        }
+        
         char* env=(char*)malloc(totallen);
+        if (!env) {
+            perror("malloc");
+            return -1;
+        }
         safer_read(fd, env, totallen);
         char** envp_;
         if (opts->client_environment) {
             envp_=malloc((numargs+4+1)*sizeof(char*));
+            
+            if (!envp_) {
+                perror("malloc");
+                return -1;
+            }
+            
             int was_zero = 1;
             u=0;
             for(i=0; i<totallen; ++i) {
@@ -343,6 +391,12 @@ int serve_client(int fd, struct dived_options *opts) {
             char *buffer_gid = (char*)malloc(64);
             char *buffer_pid = (char*)malloc(64);
             char *buffer_user = (char*)malloc(1024);
+            
+            if (!buffer_uid || !buffer_gid || !buffer_pid || !buffer_user) {
+                perror("malloc");
+                return -1;
+            }
+            
             snprintf(buffer_uid, 64, "DIVE_UID=%d", cred.uid);
             snprintf(buffer_gid, 64, "DIVE_GID=%d", cred.gid);
             snprintf(buffer_pid, 64, "DIVE_PID=%d", cred.pid);
@@ -497,6 +551,14 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->client_chroot = 0;
     opts->root_to_current = 0;
     opts->authentication_program = NULL;
+
+    
+    opts->maximum_fd_count=MAXFD-16;
+    opts->maximum_argv_count=1000000;
+    opts->maximum_argv_size=10000000;
+    opts->maximum_envp_count=1000000;
+    opts->maximum_envp_size=10000000;
+    
     if(!strcmp(argv[1], "-i") || !strcmp(argv[1], "--inetd")) { opts->inetd = 1; }
     if(!strcmp(argv[1], "-J") || !strcmp(argv[1], "--just-execute")) { 
         fprintf(stderr, "--just-execute option is not supported in 'nocreep' edition\n");
