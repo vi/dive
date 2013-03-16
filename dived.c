@@ -1148,6 +1148,10 @@ int main(int argc, char* argv[], char* envp[]) {
         }
         
         char* stack = malloc(CLONE_STACK_SIZE);
+        if (!stack) {
+            perror("malloc");
+            return -1;
+        }
         char* stack_pointer = stack;
         
         #ifndef CPU_STACK_GROWS_UP
