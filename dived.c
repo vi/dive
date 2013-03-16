@@ -342,6 +342,10 @@ int serve_client(int fd, struct dived_options *opts) {
         for(i=0; i<totallen; ++i) {
             if (!args[i]) {
                 ++u;
+                if ( u-forced_argv_count > numargs) {
+                    fprintf(stderr, "dived: Malformed argv\n");
+                    return -1;
+                }
                 argv[u]=args+i+1;
             }
         }
