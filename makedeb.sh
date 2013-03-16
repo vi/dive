@@ -64,6 +64,6 @@ install -s -m 755 dive dived release/usr/bin/
 cat dive.1 | gzip -9 > release/usr/share/man/man1/dive.1.gz
 cat dived.1 | gzip -9 > release/usr/share/man/man1/dived.1.gz
 
-dpkg-deb -b release dive_$VERSION.0-1_i386.deb 
+dpkg-deb -b release dive_$VERSION-1_i386.deb 
 
 rm -Rf release
