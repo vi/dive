@@ -1151,6 +1151,16 @@ int main(int argc, char* argv[], char* envp[]) {
             }
         }
         
+        if (! ((flags & CLONE_NEWUSER) ||  (flags & CLONE_NEWPID)) ) {
+            /* Simpler mode: just use unshare(2) */
+            int ret = unshare(flags);
+            if (ret == -1) {
+                perror("unshare");
+                return -1;
+            }
+            return serve(opts);
+        }
+        
         char* stack = malloc(CLONE_STACK_SIZE);
         if (!stack) {
             perror("malloc");
