@@ -1,3 +1,10 @@
+dive (1.3.1-1) unstable; urgency=low
+
+  * Fix insecurity when user is not found
+
+ -- Vitaly Shukela <vi0oss@gmail.com>  Tue, 12 Mar 2013 02:50:00 +0300
+
+
 dive (1.3.0-1) unstable; urgency=low
 
   * Initial release (Closes: #nnnn)
