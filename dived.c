@@ -340,6 +340,9 @@ int serve_client(int fd, struct dived_options *opts) {
             if (pw) {
                 targetuid = pw->pw_uid;
                 targetgid = pw->pw_gid;
+            } else {
+                fprintf(stderr, "Failed to getpwnam the specified user\n");
+                return 112;
             }
         } else {
             /* By default it is user at the other end of the connection */
@@ -356,7 +359,8 @@ int serve_client(int fd, struct dived_options *opts) {
                 effective_user = pw_e->pw_uid;
                 effective_group = pw_e->pw_gid;
             } else {
-                effective_user = atoi(opts->effective_user);
+                effective_user=-1;
+                sscanf(opts->effective_user, "%d", &effective_user);
             }
         }
         
