@@ -84,6 +84,7 @@ For less feature-creep version see "nocreep" branch
     * Without TIOCSCTTY, use `socat -,raw,echo=0 exec:bash,pty,setsid,stderr` (there's hind in `dive`'s usage message) as the program to start to have nicer bash
     * With TIOCSCTTY it steams controlling terminal from the previous process (leaving it "homeless"), so "exec dive socket bash" is preferred (or workaround with [reptyr](https://github.com/nelhage/reptyr) >= v0.4 is needed).
 * Current directory can be "smuggled" into the chroot or unshare where that part of filesystem is not mounted (can be prevented using -W or -H options)
+* dived sets up groups for user, but it does not provide fully fledged PAM-like login. For example, resource limits are just inherited, not set up using `/etc/security/limits.conf`.
  
 
  There are pre-built i386 binaries for [dive](http://vi-server.org/pub/dive) and [dived](http://vi-server.org/pub/dived). There are also [musl-gcc](http://www.musl-libc.org/)-built binaries for [dive](http://vi-server.org/pub/dive_musl) and [dived](http://vi-server.org/pub/dived_musl) (without capabilities support). There are static uClibc ARMel binaries: [dive](http://vi-server.org/pub/dive_armel), [dived](http://vi-server.org/pub/dived_armel) (also without libcap).
