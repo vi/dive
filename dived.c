@@ -424,7 +424,7 @@ int serve_client(int fd, struct dived_options *opts) {
                         continue;
                     }
                     if(prctl(PR_CAPBSET_DROP, c, 0, 0, 0)==-1) {                
-                        perror("prctl");
+                        perror("prctl(PR_CAPBSET_DROP)");
                         return -1;
                     }
                 }
@@ -457,7 +457,7 @@ int serve_client(int fd, struct dived_options *opts) {
                                 if(errno==EINVAL) {
                                     continue;
                                 }
-                                perror("prctl");
+                                perror("prctl(PR_CAPBSET_DROP)");
                                 return -1;
                             }
                         } else {
@@ -468,7 +468,7 @@ int serve_client(int fd, struct dived_options *opts) {
             }
             if (also_remove_CAP_SETPCAP) {
                 if(prctl(PR_CAPBSET_DROP, CAP_SETPCAP, 0, 0, 0)==-1) {                
-                    perror("prctl");
+                    perror("prctl(PR_CAPBSET_DROP)");
                     return -1;
                 }
             }
