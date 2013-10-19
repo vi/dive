@@ -80,6 +80,7 @@ struct dived_options {
     int client_environment;
     int client_argv;
     char* chroot_;
+    char* setns_file;
     char** envp;
     char* unshare_;
     int inetd;
@@ -116,6 +117,19 @@ int serve_client(int fd, struct dived_options *opts) {
             perror("chroot");
             return 23;
         }
+    }
+    
+    if (opts->setns_file) {
+        int fd = open(opts->setns_file, O_RDONLY);
+        if(fd==-1) {
+            perror("open");
+            return 23;
+        }
+        if(setns(fd, 0) == -1) {
+            perror("setns");
+            return 23;
+        }
+        close(fd);
     }
     
     struct ucred cred;
@@ -828,6 +842,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("              Nonzero exit code => rejected client.\n");
         printf("          -S --no-setsid        no setsid\n");
         printf("          -T --no-csctty        no ioctl TIOCSCTTY\n");
+        printf("          -N --setns file       open this file and do setns(2)\n");
         printf("          -R --chroot           chroot to this directory \n");
         printf("              Note that current directory stays on unchrooted filesystem; use -W option to prevent.\n");
         printf("          -r --client-chroot    Allow arbitrary chroot from client\n");
@@ -879,6 +894,7 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->client_argv = 1;
     opts->client_environment = 1;
     opts->chroot_ = NULL;
+    opts->setns_file = NULL;
     opts->envp = envp;
     opts->unshare_ = NULL;
     opts->inetd = 0;
@@ -947,6 +963,10 @@ int main(int argc, char* argv[], char* envp[]) {
             }else
             if(!strcmp(argv[i], "-R") || !strcmp(argv[i], "--chroot")) {
                 opts->chroot_=argv[i+1];
+                ++i;
+            }else
+            if(!strcmp(argv[i], "-N") || !strcmp(argv[i], "--setns")) {
+                opts->setns_file=argv[i+1];
                 ++i;
             }else
             if(!strcmp(argv[i], "-s") || !strcmp(argv[i], "--unshare")) {
