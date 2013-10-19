@@ -350,11 +350,14 @@ int serve_client(int fd, struct dived_options *opts) {
         if (!opts->lock_securebits) {
             prctl(PR_SET_SECUREBITS, SECBIT_KEEP_CAPS, 0, 0);
         } else {
-            prctl(PR_SET_SECUREBITS, 
-                SECBIT_KEEP_CAPS |
-                SECBIT_NO_SETUID_FIXUP | SECBIT_NO_SETUID_FIXUP_LOCKED |
-                SECBIT_NOROOT | SECBIT_NOROOT_LOCKED
-                , 0, 0);            
+            if(prctl(PR_SET_SECUREBITS, 
+                        SECBIT_KEEP_CAPS |
+                        SECBIT_NO_SETUID_FIXUP | SECBIT_NO_SETUID_FIXUP_LOCKED |
+                        SECBIT_NOROOT | SECBIT_NOROOT_LOCKED
+                        , 0, 0) == -1) {
+                perror("prctl(PR_SET_SECUREBITS)");
+                return -1;
+            }
         }
     }
     #endif
