@@ -849,7 +849,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("              Nonzero exit code => rejected client.\n");
         printf("          -S --no-setsid        no setsid\n");
         printf("          -T --no-csctty        no ioctl TIOCSCTTY\n");
-        printf("          -N --setns file       open this file and do setns(2)\n");
+        printf("          -N --setns file       open this file and do setns(2); can be specified multiple times.\n");
         printf("          -R --chroot           chroot to this directory \n");
         printf("              Note that current directory stays on unchrooted filesystem; use -W option to prevent.\n");
         printf("          -r --client-chroot    Allow arbitrary chroot from client\n");
