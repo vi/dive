@@ -1,9 +1,12 @@
 #!/bin/bash
 
+true ${CC="gcc"}
+
 rm -f config.mak2
 rm -f config.h
 
 echo > config.h
+echo > config.mak2
 
 
 for i in "$@"; do
@@ -12,4 +15,24 @@ for i in "$@"; do
     fi
 done
 
-gcc -E -o /dev/null -x c - <<< '#include <linux/securebits.h>' || echo "#define SECUREBITS_WORKAROUND" >> config.h
+"$CC" -E -o /dev/null -x c - <<< '#include <linux/securebits.h>' || echo "#define SECUREBITS_WORKAROUND" >> config.h
+"$CC" -E -o /dev/null -x c - <<< '#include <sys/signalfd.h>' || echo "#define SIGNALFD_WORKAROUND" >> config.h
+"$CC" -E -o /dev/null -x c - <<< '#include <sys/capability.h>' || (
+    echo 'NO_CAPABILITIES=1' >> config.mak2
+    echo "#define NO_CAPABILITIES" >> config.h
+    echo 
+)
+if [[ "$(printf '#define _GNU_SOURCE\n#include <sched.h>\nCLONE_NEWUSER\n' | "$CC" -E -x c - | tail -n 1)" == "CLONE_NEWUSER" ]]; then
+    echo "#define CLONE_PARAMETERS_WORKAROUND" >> config.h
+fi
+if ! printf '#define _GNU_SOURCE\n#include <sched.h>\n' | "$CC" -E  -x c - | grep '\<setns\>'; then
+    echo "#define NO_SETNS" >> config.h
+fi
+if ! printf '#define _GNU_SOURCE\n#include <unistd.h>\n' | "$CC" -E  -x c - | grep '\<execvpe\>'; then
+    echo "#define NO_EXECVPE" >> config.h
+fi
+if ! printf '#define _GNU_SOURCE\n#include <sched.h>\n' | "$CC" -E  -x c - | grep '\<unshare\>'; then
+    echo "#define NO_UNSHARE" >> config.h
+fi
+
+echo "Configuration finished, wrote necessary workarounds to config.h"

@@ -6,6 +6,11 @@
 #define NULL ((void *) 0)
 #endif
 
+#ifndef MSG_CMSG_CLOEXEC
+#define MSG_CMSG_CLOEXEC 0
+// we explicitly close all file descriptors obtained thought the recv_fd anyway
+#endif
+
 // http://www.thomasstover.com/uds.html
 
 int recv_fd(int socket)

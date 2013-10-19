@@ -1,6 +1,8 @@
 // dived -- Server for seamless program starter inside unshared namespaces
 // License=MIT ; Created by Vitaly "_Vi" Shukela in 2012
 
+#include "config.h"
+
 #define _GNU_SOURCE
 
 #include <sched.h> // clone
@@ -19,11 +21,12 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/select.h>
+#ifndef SIGNALFD_WORKAROUND
 #include <sys/signalfd.h>
+#endif
 #include <string.h>
 #include <unistd.h>
 
-#include "config.h"
 
 #ifndef NO_CAPABILITIES   
     #include <sys/capability.h>
@@ -34,6 +37,11 @@
         #include "hacks/securebits.h"
     #endif
 #endif
+
+#ifdef CLONE_PARAMETERS_WORKAROUND
+    #include "hacks/clone_parameters.h"
+#endif // CLONE_PARAMETERS_WORKAROUND
+
 
 #include <sys/prctl.h>
 
@@ -121,6 +129,7 @@ int serve_client(int fd, struct dived_options *opts) {
         }
     }
     
+    #ifndef NO_SETNS
     { 
         int i;
         for (i=0; i<MAX_SETNS_FILES; ++i) {
@@ -138,6 +147,7 @@ int serve_client(int fd, struct dived_options *opts) {
             }
         }
     }
+    #endif
     
     struct ucred cred;
     socklen_t len = sizeof(struct ucred);
@@ -512,7 +522,9 @@ int serve_client(int fd, struct dived_options *opts) {
         sigset_t mask;
         sigemptyset(&mask);
         sigaddset(&mask, SIGCHLD);
+        #ifndef SIGNALFD_WORKAROUND
         signal_fd = signalfd(-1, &mask, 0/*SFD_NONBLOCK*/);
+        #endif
         sigprocmask(SIG_BLOCK, &mask, NULL);
     }
 
@@ -687,6 +699,7 @@ int serve_client(int fd, struct dived_options *opts) {
     
     int status;
     if (opts->signal_processing && signal_fd != -1) {
+        #ifndef SIGNALFD_WORKAROUND
         fcntl(dive_signal_fd, F_SETFL, O_NONBLOCK);
         
         int maxfd = (signal_fd > dive_signal_fd) ? signal_fd  : dive_signal_fd;
@@ -726,10 +739,13 @@ int serve_client(int fd, struct dived_options *opts) {
                 }
                 
             }
-        }      
+        }
+        #endif // SIGNALFD_WORKAROUND
     } else {
         close(dive_signal_fd);
         
+        
+        #ifndef SIGNALFD_WORKAROUND
         struct signalfd_siginfo si;
         ret = read(signal_fd, &si, sizeof si);
         if (ret != -1 && si.ssi_pid == pid2 && si.ssi_signo == SIGCHLD) {
@@ -739,6 +755,7 @@ int serve_client(int fd, struct dived_options *opts) {
         }
         /* fallback */
         close(signal_fd);
+        #endif // SIGNALFD_WORKAROUND
         
         waitpid(pid2, &status, 0);
         int exitcode = WEXITSTATUS(status);
@@ -974,6 +991,10 @@ int main(int argc, char* argv[], char* envp[]) {
             }else
             if(!strcmp(argv[i], "-N") || !strcmp(argv[i], "--setns")) {
                 int j;
+                #ifdef NO_SETNS
+                    fprintf(stderr, "setns is not enabled in this build of dived\n");
+                    return 4;
+                #endif
                 for (j=0; j<MAX_SETNS_FILES && opts->setns_files[j]!=NULL; ++j);
                 if (j == MAX_SETNS_FILES) {
                     fprintf(stderr, "Exceed maximum number of --setns arguments\n");
@@ -1059,7 +1080,7 @@ int main(int argc, char* argv[], char* envp[]) {
     
     #ifdef NO_CAPABILITIES       
     if (opts->set_capabilities || opts->retain_capabilities || opts->remove_capabilities) {
-        fprintf(stderr, "Capabilities are not supported with musl-gcc\n");
+        fprintf(stderr, "Capabilities are not enabled for this build\n");
         return 17;
     }
     #endif
@@ -1188,6 +1209,7 @@ int main(int argc, char* argv[], char* envp[]) {
             }
         }
         
+        #ifndef NO_UNSHARE
         if (! ((flags & CLONE_NEWUSER) ||  (flags & CLONE_NEWPID)) ) {
             /* Simpler mode: just use unshare(2) */
             int ret = unshare(flags);
@@ -1197,6 +1219,7 @@ int main(int argc, char* argv[], char* envp[]) {
             }
             return serve(opts);
         }
+        #endif
         
         char* stack = malloc(CLONE_STACK_SIZE);
         if (!stack) {
@@ -1223,7 +1246,9 @@ int main(int argc, char* argv[], char* envp[]) {
             sigset_t mask;
             sigemptyset(&mask);
             sigaddset(&mask, SIGCHLD);
+            #ifndef SIGNALFD_WORKAROUND
             signal_fd = signalfd(-1, &mask, 0/*SFD_NONBLOCK*/);
+            #endif
             sigprocmask(SIG_BLOCK, &mask, NULL);
         }
         
@@ -1241,6 +1266,7 @@ int main(int argc, char* argv[], char* envp[]) {
         }
         
         if (opts->nodaemon) {  
+            #ifndef SIGNALFD_WORKAROUND
             if (signal_fd!=-1) for(;;) {
                 struct signalfd_siginfo si;
                 int ret = read(signal_fd, &si, sizeof si);
@@ -1249,6 +1275,7 @@ int main(int argc, char* argv[], char* envp[]) {
                 }
                 if (ret==-1) break;
             }
+            #endif // SIGNALFD_WORKAROUND
             
             /* Fall-back to unreliable method */
             

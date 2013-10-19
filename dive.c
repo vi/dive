@@ -3,6 +3,8 @@
 
 #define _GNU_SOURCE
 
+#include "config.h"
+
 #include <stdio.h>
 #include <sys/socket.h>
 #include <sys/stat.h>   // for umask
@@ -16,7 +18,11 @@
 #include <sys/stat.h>
 #include  <fcntl.h>
 #include <sys/select.h>
+
+#ifndef SIGNALFD_WORKAROUND
 #include <sys/signalfd.h>
+#endif
+
 #include <string.h>
 
 #include "send_fd.h"
@@ -111,7 +117,10 @@ int main(int argc, char* argv[], char* envp[]) {
     /* Open signal FD */
     sigset_t mask;
     sigfillset(&mask);
-    int signal_fd = signalfd(-1, &mask, SFD_NONBLOCK);
+    int signal_fd = -1;
+    #ifndef SIGNALFD_WORKAROUND
+    signal_fd = signalfd(-1, &mask, SFD_NONBLOCK);
+    #endif
     sigprocmask(SIG_BLOCK, &mask, NULL);
     
     
@@ -281,7 +290,7 @@ int main(int argc, char* argv[], char* envp[]) {
         close(fd);
         fd=-1;
     }
-    
+       
     if(workaround_waiting_fd[0]!=-1) {
         fd = workaround_waiting_fd[0];
     }
@@ -291,6 +300,7 @@ int main(int argc, char* argv[], char* envp[]) {
         return 0;
     }
     
+    #ifndef SIGNALFD_WORKAROUND
     if (signal_fd != -1) {
         int maxfd = (signal_fd > fd) ? signal_fd : fd;
         for(;;) {
@@ -326,6 +336,7 @@ int main(int argc, char* argv[], char* envp[]) {
             }
         }
     }
+    #endif // SIGNALFD_WORKAROUND
     
     /* Read the exitcode */
     int exitcode=0;
