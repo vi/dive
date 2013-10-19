@@ -34,7 +34,7 @@ deb_light: dived dive
 	fakeroot ./makedeb.sh
 	
 deb_heavy: dist
-	sh -c "cd dist/dive-* && debuild"
+	./makedeb_heavy.sh
 
 musl: recv_fd.h recv_fd.c dived.c safer.c
 	musl-gcc ${CFLAGS} -DNO_CAPABILITIES -DNO_EXECVPE -Wall recv_fd.c dived.c safer.c -o dived_musl
@@ -49,4 +49,3 @@ dist:
 
 clean:
 	rm -f dive dived *.o config.h
-
