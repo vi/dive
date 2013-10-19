@@ -1,3 +1,9 @@
+dive (1.4.1-1) unstable; urgency=low
+
+  * Refuse to run program if --lock-securebits option failed to apply
+
+ -- Vitaly Shukela <vi0oss@gmail.com>  Sat, 19 Oct 2013 02:50:00 +0300
+
 dive (1.4.0-1) unstable; urgency=low
 
   * Add --netns option to dive into /proc/.../ns/...
