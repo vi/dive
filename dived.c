@@ -666,6 +666,8 @@ int serve_client(int fd, struct dived_options *opts) {
             
             close(fd);
             execvp(opts->forced_argv[0], opts->forced_argv);
+            perror("execvp");
+            exit(127);
         }
     }
 
