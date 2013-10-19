@@ -1064,6 +1064,14 @@ int main(int argc, char* argv[], char* envp[]) {
                 opts->forced_argv_count = argc - (i+1);
                 break;
             }else
+            if(!strcmp(argv[i], "-J") || !strcmp(argv[i], "--just-execute")) {
+                fprintf(stderr, "Option --just-execute must be the first\n");
+                return 4;
+            }else
+            if(!strcmp(argv[i], "-i") || !strcmp(argv[i], "--inetd")) {
+                fprintf(stderr, "Option --inetd must be the first\n");
+                return 4;
+            }else
             {
                 fprintf(stderr, "Unknown argument %s\n", argv[i]);
                 return 4;
@@ -1091,6 +1099,11 @@ int main(int argc, char* argv[], char* envp[]) {
     if (opts->remove_capabilities && opts->retain_capabilities) {
         fprintf(stderr, "--remove-capabilities and --retain-capabilities are incompatible\n");
         return 18;
+    }
+    
+    if (opts->just_execute && opts->forced_argv_count == 0) {        
+        fprintf(stderr, "You must include argv after -- with --just-execute\n");
+        return 4;
     }
     
     if (!opts->inetd && !opts->just_execute) {
