@@ -58,6 +58,8 @@ void sigchild(int arg) {
     wait(&status);
 }
 
+#define MAX_SETNS_FILES 8
+
 struct dived_options {
     int sock;
     char* socket_path;
@@ -80,7 +82,7 @@ struct dived_options {
     int client_environment;
     int client_argv;
     char* chroot_;
-    char* setns_file;
+    char* setns_files[MAX_SETNS_FILES];
     char** envp;
     char* unshare_;
     int inetd;
@@ -119,17 +121,22 @@ int serve_client(int fd, struct dived_options *opts) {
         }
     }
     
-    if (opts->setns_file) {
-        int fd = open(opts->setns_file, O_RDONLY);
-        if(fd==-1) {
-            perror("open");
-            return 23;
+    { 
+        int i;
+        for (i=0; i<MAX_SETNS_FILES; ++i) {
+            if (opts->setns_files[i]) {
+                int nsfd = open(opts->setns_files[i], O_RDONLY);
+                if(nsfd==-1) {
+                    perror("open");
+                    return 23;
+                }
+                if(setns(nsfd, 0) == -1) {
+                    perror("setns");
+                    return 23;
+                }
+                close(nsfd);
+            }
         }
-        if(setns(fd, 0) == -1) {
-            perror("setns");
-            return 23;
-        }
-        close(fd);
     }
     
     struct ucred cred;
@@ -894,7 +901,7 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->client_argv = 1;
     opts->client_environment = 1;
     opts->chroot_ = NULL;
-    opts->setns_file = NULL;
+    {int i; for(i=0; i<MAX_SETNS_FILES; ++i) { opts->setns_files[i] = NULL; } }
     opts->envp = envp;
     opts->unshare_ = NULL;
     opts->inetd = 0;
@@ -966,7 +973,13 @@ int main(int argc, char* argv[], char* envp[]) {
                 ++i;
             }else
             if(!strcmp(argv[i], "-N") || !strcmp(argv[i], "--setns")) {
-                opts->setns_file=argv[i+1];
+                int j;
+                for (j=0; j<MAX_SETNS_FILES && opts->setns_files[j]!=NULL; ++j);
+                if (j == MAX_SETNS_FILES) {
+                    fprintf(stderr, "Exceed maximum number of --setns arguments\n");
+                    return 4;
+                }
+                opts->setns_files[j]=argv[i+1];
                 ++i;
             }else
             if(!strcmp(argv[i], "-s") || !strcmp(argv[i], "--unshare")) {
