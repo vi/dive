@@ -29,6 +29,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifndef NO_RLIMIT
+#include <sys/resource.h>
+#endif
+
 
 #ifndef NO_CAPABILITIES   
     #include <sys/capability.h>
@@ -69,6 +73,12 @@ void sigchild(int arg) {
 }
 
 #define MAX_SETNS_FILES 8
+#define MAX_RLIMIT_SETS 30
+
+struct rlimit_setter {
+    int resource;
+    struct rlimit limits;
+};
 
 struct dived_options {
     int sock;
@@ -107,6 +117,7 @@ struct dived_options {
     int lock_securebits;
     int signal_processing;
     int fork_and_wait_for_exit_code;
+    struct rlimit_setter rlimits[MAX_RLIMIT_SETS];
     
     int maximum_fd_count;
     int maximum_argv_count;
@@ -364,6 +375,22 @@ int serve_client(int fd, struct dived_options *opts) {
     }
     #endif
 
+    /* Set resource limits, if needed */
+    #ifndef NO_RLIMIT
+    if(opts->rlimits[0].resource!=-1) {
+        int j;
+        for(j=0; j<MAX_RLIMIT_SETS; ++j) {
+            struct rlimit_setter *r = &opts->rlimits[j];
+            if(r->resource==-1)break;
+            
+            if(setrlimit(r->resource, &r->limits) == -1) {
+                perror("setrlimit");
+                return -1;
+            }
+        }
+    }
+    #endif
+    
     /* Change into the appropriate user*/
     if(!opts->noprivs) {
         struct passwd *pw;                
@@ -848,7 +875,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("Usage: dived {socket_path|@abstract_address|-i|-J} [-p pidfile] [-u user] [-e effective_user] "
                "[-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] [-a \"program\"] "
                "[{-B cap_smth1,cap_smth2|-b cap_smth1,cap_smth2}] [-X] [-c 'cap_smth+eip cap_smth2+i'] "
-               "[-N /proc/.../ns/net [-N ...]]  "
+               "[-N /proc/.../ns/net [-N ...]] [-l res_name1=hard1,4=0,res_name2=hard2:soft2,...] "
                "[various other argumentless options] [-- prepended commandline parts]\n");
         printf("          -d --detach           detach\n");
         printf("          -i --inetd            serve once, interpred stdin as client socket\n");
@@ -870,6 +897,8 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("              The program is started using \"system\" after file descriptors are received\n");
         printf("              from client, but before everything else (root, current dir, environment) is received.\n");
         printf("              Nonzero exit code => rejected client.\n");
+        printf("          -l --rlimit           Set resource limits (comma-separated key=val list)\n");
+        printf("                                  as,cpu,fsize,data,stack,core,locks,sigpending,msgqueue,nice,rtprio,rttime,nofile,nproc,memlock\n");
         printf("          -S --no-setsid        no setsid\n");
         printf("          -T --no-csctty        no ioctl TIOCSCTTY\n");
         printf("          -N --setns file       open this file and do setns(2); can be specified multiple times.\n");
@@ -937,6 +966,7 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->just_execute = 0;
     opts->lock_securebits = 0;
     opts->fork_and_wait_for_exit_code = 1;
+    {int i; for(i=0; i<MAX_RLIMIT_SETS; ++i) { opts->rlimits[i].resource = -1; } }
     
     opts->maximum_fd_count=MAXFD-16;
     opts->maximum_argv_count=1000000;
@@ -1036,6 +1066,90 @@ int main(int argc, char* argv[], char* envp[]) {
             }else
             if(!strcmp(argv[i], "-a") || !strcmp(argv[i], "--authenticate")) {
                 opts->authentication_program = argv[i+1];
+                ++i;
+            }else                
+            if(!strcmp(argv[i], "-l") || !strcmp(argv[i], "--rlimit")) {
+                int j;
+                #ifdef NO_RLIMIT
+                    fprintf(stderr, "--rlimit is not enabled in this build of dived\n");
+                    return 4;
+                #endif
+                j=0;
+                char *saveptr_commas;
+                char* q = strtok_r(argv[i+1], ",", &saveptr_commas);
+                for(; q; q=strtok_r(NULL, ",", &saveptr_commas)) {
+                    if (j==MAX_RLIMIT_SETS) {
+                        fprintf(stderr, "Exceed maximum number of --rlimit arguments\n");
+                        return 4;
+                    }             
+                    struct rlimit_setter *r = &opts->rlimits[j];
+                    
+                    char *saveptr_equalsign;
+                    char *saveptr_colon;
+                    
+                    char *resource = strtok_r(q, "=", &saveptr_equalsign);
+                    char *limits = strtok_r(NULL, "=", &saveptr_equalsign);
+                    
+                    if (resource==NULL || limits==NULL) {
+                        fprintf(stderr, "Invalid --rlimit parameter %s\n",q);
+                        fprintf(stderr, "Should be rlimit_name_or_number=hard_limit[:soft_limit]");
+                        return 4;
+                    }
+                    
+                    char *limit_hard = strtok_r(limits, ":", &saveptr_colon);
+                    char *limit_soft = strtok_r(NULL, ":", &saveptr_colon);
+                    
+                    if(limit_hard==NULL) {
+                        fprintf(stderr, "Invalid --rlimit value \"%s\"\n", q);
+                        return 4;
+                    } else {
+                        if(sscanf(limit_hard, "%ld", &r->limits.rlim_max) != 1) {
+                            fprintf(stderr, "\"%s\" is not a number in --rlimit %s\n", limit_hard, q);
+                            return 4;
+                        }
+                    }
+                    if (limit_soft==NULL) {
+                        r->limits.rlim_cur = r->limits.rlim_max;
+                    } else {
+                        if(sscanf(limit_soft, "%ld", &r->limits.rlim_cur) != 1) {
+                            fprintf(stderr, "\"%s\" is not a number in --rlimit %s\n", limit_soft, q);
+                            return 4;
+                        }                        
+                    }
+                    
+                    if(sscanf(resource, "%d", &r->resource)!=1) {
+                        if      (!strcasecmp(resource, "as"))         r->resource=RLIMIT_AS;
+                        else if (!strcasecmp(resource, "cpu"))        r->resource=RLIMIT_CPU;
+                        else if (!strcasecmp(resource, "fsize"))      r->resource=RLIMIT_FSIZE;
+                        else if (!strcasecmp(resource, "data"))       r->resource=RLIMIT_DATA;
+                        else if (!strcasecmp(resource, "stack"))      r->resource=RLIMIT_STACK;
+                        else if (!strcasecmp(resource, "core"))       r->resource=RLIMIT_CORE;
+                        else if (!strcasecmp(resource, "locks"))      r->resource=RLIMIT_LOCKS;
+                        else if (!strcasecmp(resource, "sigpending")) r->resource=RLIMIT_SIGPENDING;
+                        else if (!strcasecmp(resource, "msgqueue"))   r->resource=RLIMIT_MSGQUEUE;
+                        else if (!strcasecmp(resource, "nice"))       r->resource=RLIMIT_NICE;
+                        else if (!strcasecmp(resource, "nofile"))     r->resource=RLIMIT_NOFILE;
+                        else if (!strcasecmp(resource, "nproc"))      r->resource=RLIMIT_NPROC;
+                        else if (!strcasecmp(resource, "memlock"))    r->resource=RLIMIT_MEMLOCK;
+#ifndef RLIMIT_RTPRIO
+#define RLIMIT_RTPRIO		14
+#endif
+                        else if (!strcasecmp(resource, "rtprio"))     r->resource=RLIMIT_RTPRIO;
+#ifndef RLIMIT_RTTIME
+#define RLIMIT_RTTIME		15
+#endif
+                        else if (!strcasecmp(resource, "rttime"))     r->resource=RLIMIT_RTTIME;
+                        else {
+                            fprintf(stderr, "Unknown --rlimit resource %s\n", resource);
+                            fprintf(stderr, "You can also specify a numeric value\n");
+                            return 4;
+                        }
+                    }
+                 
+                    ++j;
+                }
+                
+                
                 ++i;
             }else
             if(!strcmp(argv[i], "-B") || !strcmp(argv[i], "--retain-capabilities")) {
