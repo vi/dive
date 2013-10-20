@@ -21,9 +21,11 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/select.h>
+
 #ifndef SIGNALFD_WORKAROUND
 #include <sys/signalfd.h>
 #endif
+
 #include <string.h>
 #include <unistd.h>
 
