@@ -93,7 +93,7 @@ For less feature-creep version see "nocreep" branch
 **Notes**
 
 * For clean interactive shell access dived need to be started as root (for setsid/TIOCSCTTY)
-    * Without TIOCSCTTY, use `socat -,raw,echo=0 exec:bash,pty,setsid,stderr` (there's hind in `dive`'s usage message) as the program to start to have nicer bash
+    * Without TIOCSCTTY, use `socat -,raw,echo=0 exec:bash,pty,setsid,stderr` (there's a hint in `dive`'s usage message) as the program to start to have nicer bash
     * With TIOCSCTTY it steams controlling terminal from the previous process (leaving it "homeless"), so "exec dive socket bash" is preferred (or workaround with [reptyr](https://github.com/nelhage/reptyr) >= v0.4 is needed).
 * Current directory can be "smuggled" into the chroot or unshare where that part of filesystem is not mounted (can be prevented using -W or -H options)
 * dived sets up groups for user, but it does not provide fully fledged PAM-like login. For example, resource limits are just inherited, not set up using `/etc/security/limits.conf`.
