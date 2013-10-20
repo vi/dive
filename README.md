@@ -87,4 +87,34 @@ For less feature-creep version see "nocreep" branch
 * dived sets up groups for user, but it does not provide fully fledged PAM-like login. For example, resource limits are just inherited, not set up using `/etc/security/limits.conf`.
  
 
- There are pre-built i386 binaries for [dive](http://vi-server.org/pub/dive) and [dived](http://vi-server.org/pub/dived). There are also [musl-gcc](http://www.musl-libc.org/)-built binaries for [dive](http://vi-server.org/pub/dive_musl) and [dived](http://vi-server.org/pub/dived_musl) (without capabilities support). There are static uClibc ARMel binaries: [dive](http://vi-server.org/pub/dive_armel), [dived](http://vi-server.org/pub/dived_armel) (also without libcap).
+For pre-build versions of dive and dived see "Releases". Note that some of pre-built versions may lack features.
+
+Process attributes
+---
+A table of what happens to various process attributes when process is started 
+"remotely" over dive/dived compared to just `exec`ing directly.
+"not preserved" means "like in dived" or "whatever", "preserved" means "like in dive" 
+or "like if we executed the program directly".
+
+<table>
+  <tr><th>Attribute</th><th>What happens</th></tr>
+  <tr><td>PID</td><td>not preserved</td> </tr>
+  <tr><td>parent PID</td><td>not preserved</td> </tr>
+  <tr><td>file descriptors</td><td> preserved (unless -O) </td> </tr>
+  <tr><td>resource limits</td> <td>not preserved</td> </tr>
+  <tr><td>uid</td> <td>preserved if possible (unless -P or -u)</td> </tr>
+  <tr><td>group list</td> <td>initialized by `initgroups` (unless -P or -u)</td> </tr>
+  <tr><td>controlling terminal</td> <td>hopefully preserved (unless -T)</td> </tr>
+  <tr><td>session id/process group</td> <td>not preserved, new session leader (unless -S)</td> </tr>
+  <tr><td>namespaces memberships</td> <td>not preserved</td> </tr>
+  <tr><td>cgroup membership</td> <td>not preserved</td> </tr>
+  <tr><td>coredump_filter</td> <td>not preserved</td> </tr>
+  <tr><td>current working directory</td> <td>preserved (unless -H)</td> </tr>
+  <tr><td>/proc/.../exe</td> <td>not preserved</td> </tr>
+  <tr><td>oom_score_adj</td> <td>not preserved</td> </tr>
+  <tr><td>root directory</td> <td>not preserved (unless -r)</td> </tr>
+  <tr><td>nice value/priority</td> <td>not preserved</td> </tr>
+  <tr><td>CPU affinity</td> <td>not preserved</td> </tr>
+  <tr><td>capabilities</td> <td>not preserved</td> </tr>
+  <tr><td>umask</td> <td>preserved (unless -M)</td> </tr>
+</table>
