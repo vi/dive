@@ -34,5 +34,8 @@ fi
 if ! printf '#define _GNU_SOURCE\n#include <sched.h>\n' | "$CC" -E  -x c - | grep '\<unshare\>'; then
     echo "#define NO_UNSHARE" >> config.h
 fi
+if ! printf '#define _GNU_SOURCE 1\n#include <sys/syscall.h>\nSYS_pivot_root' | "$CC" -E  -x c - | tail -n 1 | grep '^\s*0\?x\?[0-9]'; then
+    echo "#define NO_PIVOTROOT" >> config.h
+fi
 
 echo "Configuration finished, wrote necessary workarounds to config.h"

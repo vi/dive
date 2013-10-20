@@ -118,6 +118,8 @@ struct dived_options {
     int signal_processing;
     int fork_and_wait_for_exit_code;
     struct rlimit_setter rlimits[MAX_RLIMIT_SETS];
+    char* pivotroot_newroot;
+    char* pivotroot_putold;
     
     int maximum_fd_count;
     int maximum_argv_count;
@@ -126,7 +128,15 @@ struct dived_options {
     int maximum_envp_size;
 } options;
 
-
+#ifndef NO_PIVOTROOT
+#ifndef PIVOTROOT_WORKAROUND
+int pivot_root(const char* newroot, const char* putold);
+#else
+int pivot_root(const char* newroot, const char* putold) {
+    return syscall(SYS_pivot_root, newroot, putold, 0, 0);
+}
+#endif
+#endif // NO_PIVOTROOT
 
 int serve_client(int fd, struct dived_options *opts) {
     int ret;
@@ -141,6 +151,16 @@ int serve_client(int fd, struct dived_options *opts) {
             return 23;
         }
     }
+    
+    #ifndef NO_PIVOTROOT
+    if (opts->pivotroot_newroot) {
+        int ret = pivot_root(opts->pivotroot_newroot, opts->pivotroot_putold);
+        if (ret==-1) {
+            perror("pivot_root");
+            return 23;
+        }
+    }
+    #endif // NO_PIVOTROOT
     
     #ifndef NO_SETNS
     { 
@@ -873,7 +893,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("Dive server %s (proto %d) https://github.com/vi/dive/\n", VERSION2, VERSION);
         printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");        
         printf("Usage: dived {socket_path|@abstract_address|-i|-J} [-p pidfile] [-u user] [-e effective_user] "
-               "[-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] [-a \"program\"] "
+               "[-C mode] [-U user:group] [{-R directory | -V newroot putold}] [-r [-W]] [-s smth1,smth2,...] [-a \"program\"] "
                "[{-B cap_smth1,cap_smth2|-b cap_smth1,cap_smth2}] [-X] [-c 'cap_smth+eip cap_smth2+i'] "
                "[-N /proc/.../ns/net [-N ...]] [-l res_name1=hard1,4=0,res_name2=hard2:soft2,...] "
                "[various other argumentless options] [-- prepended commandline parts]\n");
@@ -904,6 +924,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -N --setns file       open this file and do setns(2); can be specified multiple times.\n");
         printf("          -R --chroot           chroot to this directory \n");
         printf("              Note that current directory stays on unchrooted filesystem; use -W option to prevent.\n");
+        printf("          -V --pivot-root       pivot_root to this directory, putting old root to the second argument\n");
         printf("          -r --client-chroot    Allow arbitrary chroot from client\n");
         printf("          -W --root-to-current  Set server's root directory as current directory\n");
         printf("                                (implies -H; useful with -r)\n");
@@ -1023,6 +1044,20 @@ int main(int argc, char* argv[], char* envp[]) {
             if(!strcmp(argv[i], "-R") || !strcmp(argv[i], "--chroot")) {
                 opts->chroot_=argv[i+1];
                 ++i;
+            }else
+            if(!strcmp(argv[i], "-V") || !strcmp(argv[i], "--pivot-root")) {
+                opts->pivotroot_newroot=argv[i+1];
+                ++i;
+                if(opts->pivotroot_newroot == NULL) {
+                    fprintf(stderr, "--pivot-root should be followed by two arguments\n");
+                    return 4;
+                }
+                opts->pivotroot_putold=argv[i+1];
+                ++i;
+                if(opts->pivotroot_putold == NULL) {
+                    fprintf(stderr, "--pivot-root should be followed by two arguments\n");
+                    return 4;
+                }
             }else
             if(!strcmp(argv[i], "-N") || !strcmp(argv[i], "--setns")) {
                 int j;
@@ -1245,6 +1280,17 @@ int main(int argc, char* argv[], char* envp[]) {
         fprintf(stderr, "--remove-capabilities and --retain-capabilities are incompatible\n");
         return 18;
     }
+    
+    if (opts->chroot_ && opts->pivotroot_newroot) {
+        fprintf(stderr, "--chroot and --pivot-root are incompatible\n");
+        return 4;
+    }
+    #ifdef NO_PIVOTROOT
+    if (opts->pivotroot_newroot) {
+        fprintf(stderr, "--pivot-root is not enabled for this build of dived\n");
+        return 17;
+    }
+    #endif
     
     if (opts->just_execute && opts->forced_argv_count == 0) {        
         fprintf(stderr, "You must include argv after -- with --just-execute\n");
