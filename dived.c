@@ -144,24 +144,6 @@ int serve_client(int fd, struct dived_options *opts) {
     
     int exit_code_or_signal_processing_enabled = opts->fork_and_wait_for_exit_code && !opts->just_execute;
 
-    if (opts->chroot_) {
-        int ret = chroot(opts->chroot_);
-        if (ret==-1) {
-            perror("chroot");
-            return 23;
-        }
-    }
-    
-    #ifndef NO_PIVOTROOT
-    if (opts->pivotroot_newroot) {
-        int ret = pivot_root(opts->pivotroot_newroot, opts->pivotroot_putold);
-        if (ret==-1) {
-            perror("pivot_root");
-            return 23;
-        }
-    }
-    #endif // NO_PIVOTROOT
-    
     #ifndef NO_SETNS
     { 
         int i;
@@ -181,6 +163,24 @@ int serve_client(int fd, struct dived_options *opts) {
         }
     }
     #endif
+    
+    if (opts->chroot_) {
+        int ret = chroot(opts->chroot_);
+        if (ret==-1) {
+            perror("chroot");
+            return 23;
+        }
+    }
+    
+    #ifndef NO_PIVOTROOT
+    if (opts->pivotroot_newroot) {
+        int ret = pivot_root(opts->pivotroot_newroot, opts->pivotroot_putold);
+        if (ret==-1) {
+            perror("pivot_root");
+            return 23;
+        }
+    }
+    #endif // NO_PIVOTROOT
     
     struct ucred cred;
     socklen_t len = sizeof(struct ucred);
