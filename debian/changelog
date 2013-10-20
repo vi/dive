@@ -1,3 +1,10 @@
+dive (1.5.1-1) unstable; urgency=low
+
+  * Minor change to help message
+  * Attempt to prevent some insecure arguments
+
+ -- Vitaly Shukela <vi0oss@gmail.com>  Sat, 20 Oct 2013 06:10:00 +0300
+
 dive (1.5.0-1) unstable; urgency=low
 
   * Add --rlimit option
