@@ -10,51 +10,61 @@ Works by sending file descriptors over UNIX socket.
 **Usage**
 
 ```
-Dive server v1.1 (proto 800) https://github.com/vi/dive/
+$ dived
+Dive server v1.5.1 (proto 1100) https://github.com/vi/dive/
 Listen UNIX socket and start programs for each connected client, redirecting fds to client.
-Usage: dived {socket_path|@abstract_address|-i|-J} [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-e effective_user] [-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] [-a "program"] [{-B cap_smth1,cap_smth2|-b cap_smth1,cap_smth2}] [-X] [-c 'cap_smth+eip cap_smth2+i'] [-- prepended commandline parts]
+Usage: dived {socket_path|@abstract_address|-i|-J} [-p pidfile] [-u user] [-e effective_user] [-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] [-a "program"] [{-B cap_smth1,cap_smth2|-b cap_smth1,cap_smth2}] [-X] [-c 'cap_smth+eip cap_smth2+i'] [-N /proc/.../ns/net [-N ...]] [-l res_name1=hard1,4=0,res_name2=hard2:soft2,...] [various other argumentless options] [-- prepended commandline parts]
           -d --detach           detach
           -i --inetd            serve once, interpred stdin as client socket
           -J --just-execute     don't mess with sockets at all, just execute the program.
                                 Other options does apply.
           -D --children-daemon  call daemon(0,0) in children
-          -F --no-fork          no fork, serve once (debugging)
+          -F --no-fork          no fork, serve once
+                                this is for debugging or for starting init process in PID unshare
           -P --no-setuid        no setuid/setgid/etc
           -u --user             setuid to this user instead of the client
           -e --effective-user   seteuid to this user instead of the client
           -B --retain-capabilities Remove all capabilities from bounding set
                                    except of specified ones
           -b --remove-capabilities Remove capabilities from bounding set
-          -c --set-capabilities cap_set_proc this
+          -c --set-capabilities cap_set_proc the argument (like 'cap_smth+eip cap_smth2+i')
           -X --no-new-privs     set PR_SET_NO_NEW_PRIVS
+          -L --lock-securebits  set and lock SECBIT_NO_SETUID_FIXUP and SECBIT_NOROOT
           -a --authenticate     start this program for authentication
               The program is started using "system" after file descriptors are received
               from client, but before everything else (root, current dir, environment) is received.
               Nonzero exit code => rejected client.
+          -l --rlimit           Set resource limits (comma-separated key=val list)
+                                  as,cpu,fsize,data,stack,core,locks,sigpending,msgqueue,nice,rtprio,rttime,nofile,nproc,memlock
           -S --no-setsid        no setsid
           -T --no-csctty        no ioctl TIOCSCTTY
+          -N --setns file       open this file and do setns(2); can be specified multiple times.
           -R --chroot           chroot to this directory 
               Note that current directory stays on unchrooted filesystem; use -W option to prevent.
           -r --client-chroot    Allow arbitrary chroot from client
           -W --root-to-current  Set server's root directory as current directory
                                 (implies -H; useful with -r)
-          -s --unshare          Unshare this (comma-separated list); also detaches
-                                ipc,net,fs,pid,uts
+          -s --unshare          Unshare specified namespaces (comma-separated list); also detaches
+                                ipc,net,fs,pid,uts,user
           -p --pidfile          save PID to this file
           -C --chmod            chmod the socket to this mode (like '0777')
           -U --chown            chown the socket to this user:group
           -E --no-environment   Don't let client set environment variables
-          -A --no-argv          Don't let client set command line
+          -A --no-argv          Don't let client set [part of] command line
           -H --no-chdir         Don't let client set current directory
           -O --no-fds           Don't let client set file descriptors
           -M --no-umask         Don't let client set umask
+          -n --signals          Transfer all signals from dive
+          -w --no-wait          Don't fork and wait for exit code
           --                    prepend this to each command line ('--' is mandatory)
-              Note that the program beingnocsctty strarted using "--" should be
-              as secure as suid programs, but it doesn't know
-              real uid/gid.
+              Note that the program being started using "--" with '-e' option should be
+              as secure as suid programs, unless additional options like -E, -M, -O, -H or -A are in use.
+
+
+$ dive
+Usage: dive socket_path [program arguments]
 ```
 
-    Usage: dive socket_path [program arguments]
     
 **Features**
     
