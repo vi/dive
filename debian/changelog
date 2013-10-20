@@ -1,3 +1,9 @@
+dive (1.5.0-1) unstable; urgency=low
+
+  * Add --rlimit option
+
+ -- Vitaly Shukela <vi0oss@gmail.com>  Sat, 20 Oct 2013 02:50:00 +0300
+
 dive (1.4.2-1) unstable; urgency=low
 
   * Some bug fixes
