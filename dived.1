@@ -235,6 +235,20 @@ to dived-started programs.
 
 
 .TP
+.B -N, --setns           
+Open this file and 
+.BR setns (2)
+it.
+
+Such files can be found in /proc/<pid>/ns/<something> or /var/run/netns/.
+
+You can specify this option up to 8 times to "dive" into multiple namespaces.
+
+Dived opens the namespace file each time it needs to do setns.
+So namespace will not be active only because of it is referenced by dived.
+
+
+.TP
 .B -O, --no-fds          
 Don't let client set file descriptors
 
@@ -257,20 +271,6 @@ chroot to this directory
 Note that current directory stays on unchrooted filesystem; use -W option to prevent.
 
 pidfile is saved unchrooted.
-
-
-.TP
-.B -N, --setns           
-Open this file and 
-.BR setns (2)
-it.
-
-Such files can be found in /proc/<pid>/ns/<something> or /var/run/netns/.
-
-You can specify this option up to 8 times to "dive" into multiple namespaces.
-
-Dived opens the namespace file each time it needs to do setns.
-So namespace will not be active only because of it is referenced by dived.
 
 
 .TP
