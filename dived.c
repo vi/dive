@@ -920,9 +920,8 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -n --signals          Transfer all signals from dive\n");
         printf("          -w --no-wait          Don't fork and wait for exit code\n");
         printf("          --                    prepend this to each command line ('--' is mandatory)\n");
-        printf("              Note that the program being started using \"--\" should be\n");
-        printf("              as secure as suid programs, but it doesn't know\n");
-        printf("              real uid/gid (unless -e options is used)\n");
+        printf("              Note that the program being started using \"--\" with '-e' or '-u' or '-P' options should be\n");
+        printf("              as secure as suid programs, unless additional options like -E, -M, -O, -H or -A are in use.\n");
         return 4;
     }
 
@@ -1193,6 +1192,35 @@ int main(int argc, char* argv[], char* envp[]) {
                 fprintf(stderr, "Unknown argument %s\n", argv[i]);
                 return 4;
             }
+        }
+    }
+    
+    if (!getenv("DIVED_NOSANITYCHECK") && !opts->just_execute) { // little check for really insecure setup
+        if (opts->forced_argv_count>0 && opts->forced_argv[0][0]!='/' && opts->client_environment) {
+            fprintf(stderr, "Please either use absolute program path after -- or use --no-environment option.\n");
+            fprintf(stderr, "In current mode remote client can override PATH and chose any program.\n");
+            fprintf(stderr, "Set DIVED_NOSANITYCHECK to force insecure mode.\n");
+            return 4;
+        }
+    
+        int permissive_chmod = 0;
+        int no_privs = 0;
+        int overridden_effective = 0;
+        
+        if (opts->chmod_) {
+            long mask_decoded = strtol(opts->chmod_, NULL, 8);
+            if (mask_decoded&0002) permissive_chmod = 1;
+        }
+        if (opts->effective_user) overridden_effective = 1;
+        if (opts->noprivs) no_privs = 1;
+        
+        if (opts->client_environment && permissive_chmod && opts->forced_argv_count &&
+            (overridden_effective || no_privs || (
+                opts->forceuser && (!strcmp(opts->forceuser, "root") || !strcmp(opts->forceuser, "0"))
+                ))){
+            fprintf(stderr, "Warning: Allowing permissive remote starting of specific program and also allowing");
+            fprintf(stderr, "setting environment variables is probably a security issue.\n");
+            fprintf(stderr, "Consider using --no-environment option (or set DIVED_NOSANITYCHECK to prevent this message).\n");
         }
     }
     
