@@ -269,6 +269,9 @@ Such files can be found in /proc/<pid>/ns/<something> or /var/run/netns/.
 
 You can specify this option up to 8 times to "dive" into multiple namespaces.
 
+Dived opens the namespace file each time it needs to do setns.
+So namespace will not be active only because of it is referenced by dived.
+
 
 .TP
 .B -r, --client-chroot    
