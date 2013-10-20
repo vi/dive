@@ -75,7 +75,7 @@ Usage: dive socket_path [program arguments]
 * Setting session ID and controlling terminal, for clean bash without "no job control" (requires root access)
 * Preserving of environment variables
 * Preserving of exit code
-* Selective disabling of "preserving" parts above 
+* Selective disabling of "preserving" parts above
 * Chroot / CLONE_NEW... / forced command line
 * Setting of DIVE_USER and other variables according to client credentials
 * Allowing clients to set it's own root directory ("-r" option)
@@ -84,6 +84,8 @@ Usage: dive socket_path [program arguments]
 * "Just execute" feature to use capabilities, chroot, PR_SET_NO_NEW_PRIVS
  setup; "authenticate", pidfile and so on without any "remote startup" thought
  socket at all
+* Joining namespaces with setns(2)
+* Setting resource limits with setrlimit(2)
 
 For less feature-creep version see "nocreep" branch
 
