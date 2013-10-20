@@ -208,6 +208,25 @@ Don't use the socket at all (don't receive file descriptors, argv, environment),
 just start (execve) the program right away.
 
 
+
+.TP
+.B -l, --rlimit           
+Set resource limits using
+.BR setrlimit (2)
+
+Argument should be comma-separated list of resource=hard_limit:soft_limit
+Soft limit may be omitted.
+
+"dived --help" should show the list of recognized
+resources. You can also specify numeric resources.
+
+Limit values are typicaly in bytes or in seconds.
+
+Example:
+
+dived -J --rlimit cpu=3 -- /bin/cat /dev/urandom > /dev/null
+
+
 .TP
 .B  -L, --lock-securebits  
 set and lock SECBIT_NO_SETUID_FIXUP and SECBIT_NOROOT
