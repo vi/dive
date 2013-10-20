@@ -844,11 +844,12 @@ retry_accept:
 int main(int argc, char* argv[], char* envp[]) {
     if(argc<2 || !strcmp(argv[1], "-?") || !strcmp(argv[1], "--help") || !strcmp(argv[1], "--version")) {
         printf("Dive server %s (proto %d) https://github.com/vi/dive/\n", VERSION2, VERSION);
-        printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");
-        printf("Usage: dived {socket_path|@abstract_address|-i|-J} [-d] [-D] [-F] [-P] [-S] [-p pidfile] [-u user] [-e effective_user] [-n] [-w] "
+        printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");        
+        printf("Usage: dived {socket_path|@abstract_address|-i|-J} [-p pidfile] [-u user] [-e effective_user] "
                "[-C mode] [-U user:group] [-R directory] [-r [-W]] [-s smth1,smth2,...] [-a \"program\"] "
                "[{-B cap_smth1,cap_smth2|-b cap_smth1,cap_smth2}] [-X] [-c 'cap_smth+eip cap_smth2+i'] "
-               "[-- prepended commandline parts]\n");
+               "[-N /proc/.../ns/net [-N ...]]  "
+               "[various other argumentless options] [-- prepended commandline parts]\n");
         printf("          -d --detach           detach\n");
         printf("          -i --inetd            serve once, interpred stdin as client socket\n");
         printf("          -J --just-execute     don't mess with sockets at all, just execute the program.\n");
@@ -859,12 +860,10 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -P --no-setuid        no setuid/setgid/etc\n");
         printf("          -u --user             setuid to this user instead of the client\n");
         printf("          -e --effective-user   seteuid to this user instead of the client\n");
-        #ifndef __MUSL__       
         printf("          -B --retain-capabilities Remove all capabilities from bounding set\n");
         printf("                                   except of specified ones\n");
         printf("          -b --remove-capabilities Remove capabilities from bounding set\n");
-        printf("          -c --set-capabilities cap_set_proc this\n"); 
-        #endif
+        printf("          -c --set-capabilities cap_set_proc the argument (like 'cap_smth+eip cap_smth2+i')\n"); 
         printf("          -X --no-new-privs     set PR_SET_NO_NEW_PRIVS\n");
         printf("          -L --lock-securebits  set and lock SECBIT_NO_SETUID_FIXUP and SECBIT_NOROOT\n");
         printf("          -a --authenticate     start this program for authentication\n");
@@ -879,7 +878,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -r --client-chroot    Allow arbitrary chroot from client\n");
         printf("          -W --root-to-current  Set server's root directory as current directory\n");
         printf("                                (implies -H; useful with -r)\n");
-        printf("          -s --unshare          Unshare this (comma-separated list); also detaches\n");
+        printf("          -s --unshare          Unshare specified namespaces (comma-separated list); also detaches\n");
         printf("                                ipc,net,fs,pid,uts,user\n");
         printf("          -p --pidfile          save PID to this file\n");
         printf("          -C --chmod            chmod the socket to this mode (like '0777')\n");
