@@ -261,6 +261,25 @@ sleep 0.1
 E=0 MF=1 V='qqq' t ./$DIVE_NAME test_dived /bin/echo qqq
 kill $INETD_PID
 
+announce    dived --rlimit argument parsing 1
+E=0 MF= V='' t ./$DIVED_NAME --just-execute --rlimit cpu=3 -- /bin/true
+announce    dived --rlimit argument parsing 2
+E=0 MF= V='' t ./$DIVED_NAME --just-execute -l cpu=3:3 -- /bin/true
+announce    dived --rlimit argument parsing 3
+E=0 MF= V='' t ./$DIVED_NAME --just-execute --rlimit 0=3:3 -- /bin/true
+announce    dived --rlimit argument parsing 4
+E=4 MF= V='' t ./$DIVED_NAME --just-execute --rlimit =3:3 -- /bin/true
+announce    dived --rlimit argument parsing 5
+E=4 MF= V='' t ./$DIVED_NAME --just-execute --rlimit = -- /bin/true
+announce    dived --rlimit argument parsing 6
+E=4 MF= V='' t ./$DIVED_NAME --just-execute --rlimit cpu= -- /bin/true
+announce    dived --rlimit argument parsing 7
+E=4 MF= V='' t ./$DIVED_NAME --just-execute --rlimit cpu=qqq -- /bin/true
+announce    dived --rlimit nofile=10 enforcement '9>'
+E=0 MF= V='' t ./$DIVED_NAME --just-execute --rlimit nofile=10 -- /bin/sh -c '/bin/true 9> /dev/null'
+announce    dived --rlimit nofile=10 enforcement '10>'
+E=1 MF= V='' t ./$DIVED_NAME --just-execute --rlimit nofile=10 -- /bin/sh -c '/bin/true 10> /dev/null'
+
 fi # TESTS_NO_USER
 
 
