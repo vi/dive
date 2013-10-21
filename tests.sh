@@ -246,7 +246,7 @@ E=0 V='wwwqqq' t /bin/bash -c 'DIVE_WAITMODE=2 ./$DIVE_NAME test_dived /bin/bash
 terminate_dived
     
 announce 'Can we test with inetd? (inetd and socat works)'
-inetd -i <(echo 'test_dived stream unix nowait vi  /bin/echo echo qqq')&
+inetd -i <(echo "test_dived stream unix nowait $USER  /bin/echo echo qqq")&
 INETD_PID=$!
 sleep 0.1
 E=0 MF=1 V='qqq' t socat unix-connect:test_dived  -
@@ -255,7 +255,7 @@ kill $INETD_PID
 terminate_dived
 
 announce 'Testing --inetd mode'
-inetd -i <(echo "test_dived stream unix nowait vi  ./$DIVED_NAME dived -i -T -P")&
+inetd -i <(echo "test_dived stream unix nowait $USER  ./$DIVED_NAME dived -i -T -P")&
 INETD_PID=$!
 sleep 0.1
 E=0 MF=1 V='qqq' t ./$DIVE_NAME test_dived /bin/echo qqq
