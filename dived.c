@@ -281,10 +281,15 @@ int serve_client(int fd, struct dived_options *opts) {
             debt_instead_of_fd=f;
         } else {
             if(f!=i) {
-                dup2(f, i);
+                if(dup2(f, i)==i) {
+                    saved_fdnums[i]=1;
+                } else {
+                    perror("dup2");
+                }
                 close(f);
+            } else {
+                saved_fdnums[i]=1;
             }
-            if(i<MAXFD) saved_fdnums[i]=1;
         }
     }
     
@@ -727,7 +732,7 @@ int serve_client(int fd, struct dived_options *opts) {
     /* Release client's fds */
     int i;
     for(i=0; i<MAXFD; ++i) {
-        if(saved_fdnums[i]) close(i);
+        if(saved_fdnums[i] && i!=initialisation_finished_event[0]) close(i);
     }
     
     if (debt_instead_of_fd != -1) {
