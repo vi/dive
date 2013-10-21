@@ -1,3 +1,10 @@
+dive (1.5.2-1) unstable; urgency=low
+
+  * Fix race condition bug
+  * Add pivot_root support
+
+ -- Vitaly Shukela <vi0oss@gmail.com>  Sat, 20 Oct 2013 06:10:00 +0300
+
 dive (1.5.1-1) unstable; urgency=low
 
   * Minor change to help message
