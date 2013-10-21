@@ -142,6 +142,10 @@ int serve_client(int fd, struct dived_options *opts) {
     int ret;
     (void)ret;
     
+    /* When we receive and apply (dup2) file descriptors, it can happen that we need to replace the fd itself.
+     * In this postpone applying it until we close "fd" */
+    int debt_instead_of_fd = -1;
+    
     int exit_code_or_signal_processing_enabled = opts->fork_and_wait_for_exit_code && !opts->just_execute;
 
     #ifndef NO_SETNS
@@ -274,18 +278,14 @@ int serve_client(int fd, struct dived_options *opts) {
         }
         ++received_fd_count;
         if(i==fd) {
-            /* Move away our socket desciptor */
-            int tmp = dup(fd);
-            close(fd);
-            dup2(f, i);
-            fd = tmp;
+            debt_instead_of_fd=f;
         } else {
             if(f!=i) {
                 dup2(f, i);
                 close(f);
             }
+            if(i<MAXFD) saved_fdnums[i]=1;
         }
-        if(i<MAXFD) saved_fdnums[i]=1;
     }
     
     }  // !--just-execute
@@ -700,6 +700,10 @@ int serve_client(int fd, struct dived_options *opts) {
         }
 
         close(fd);
+        if (debt_instead_of_fd != -1) {
+            dup2(debt_instead_of_fd, fd);
+            close(debt_instead_of_fd);
+        }
         
         close (initialisation_finished_event[1]);
         
@@ -724,6 +728,10 @@ int serve_client(int fd, struct dived_options *opts) {
     int i;
     for(i=0; i<MAXFD; ++i) {
         if(saved_fdnums[i]) close(i);
+    }
+    
+    if (debt_instead_of_fd != -1) {
+        close(debt_instead_of_fd);
     }
     
     close (initialisation_finished_event[1]);
