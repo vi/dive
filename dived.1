@@ -187,7 +187,21 @@ requested process with pid=1 in PID namespace.
 
 .TP
 .B -h, --chdir          
-Set this directory as current. If both --chdir and --chroot are specified, chdir happens first.
+Set this directory as current. If both --chdir and --chroot are specified, we 
+remember the specified directory before chroot, but chdir to it after the chroot.
+
+Example:
+
+dived -J -S -T -R . -h /  -- /bin/bash
+
+Swap current and root directories and execute /bin/bash
+
+Complicated example:
+
+/usr/bin/dived -J -S -T -R /lib -h / -- /ld-linux.so.2 --library-path /i386-linux-gnu/ ./usr/bin/dived -J -S -T -R . -h ../.. -- /bin/bash
+
+Escape chroot jail and re-enter it, leaving "outer" root as current directory, without executing any programs from "outer" system.
+"i386-linux-gnu", "ld-linux.so.2" and "/usr/bin/dived" may require adjustments.
 
 .TP
 .B -H, --no-chdir         
@@ -291,6 +305,8 @@ Don't mess with user/group/capabilities things at all, just start the program.
 .B -R, --chroot           
 chroot to this directory 
 Note that current directory stays on unchrooted filesystem; use -W option to prevent.
+--chroot and --chdir can be specified at the same time and should not interfere with each other.
+If relative directory is specified as argument, it is taken before --chdir is applied.
 
 pidfile is saved unchrooted.
 
