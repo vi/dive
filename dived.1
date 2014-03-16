@@ -185,6 +185,9 @@ By default dived only rejects DIVE_* environment variables.
 Accept once, serve only one client. Useful for debugging or for starting the
 requested process with pid=1 in PID namespace.
 
+.TP
+.B -h, --chdir          
+Set this directory as current. If both --chdir and --chroot are specified, chdir happens first.
 
 .TP
 .B -H, --no-chdir         
