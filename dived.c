@@ -102,6 +102,7 @@ struct dived_options {
     int client_environment;
     int client_argv;
     char* chroot_;
+    char* chdir_;
     char* setns_files[MAX_SETNS_FILES];
     char** envp;
     char* unshare_;
@@ -168,6 +169,13 @@ int serve_client(int fd, struct dived_options *opts) {
     }
     #endif
     
+    if (opts->chdir_) {
+        int ret = chdir(opts->chdir_);
+        if (ret==-1) {
+            perror("chdir");
+            return 23;
+        }
+    }
     if (opts->chroot_) {
         int ret = chroot(opts->chroot_);
         if (ret==-1) {
@@ -936,6 +944,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -T --no-csctty        no ioctl TIOCSCTTY\n");
         printf("          -N --setns file       open this file and do setns(2); can be specified multiple times.\n");
         printf("          -R --chroot           chroot to this directory \n");
+        printf("          -h --chdir            chdir to this directory (prior to chroot)\n");
         printf("              Note that current directory stays on unchrooted filesystem; use -W option to prevent.\n");
         printf("          -V --pivot-root       pivot_root to this directory, putting old root to the second argument\n");
         printf("          -r --client-chroot    Allow arbitrary chroot from client\n");
@@ -986,6 +995,7 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->client_argv = 1;
     opts->client_environment = 1;
     opts->chroot_ = NULL;
+    opts->chdir_ = NULL;
     {int i; for(i=0; i<MAX_SETNS_FILES; ++i) { opts->setns_files[i] = NULL; } }
     opts->envp = envp;
     opts->unshare_ = NULL;
@@ -1052,6 +1062,10 @@ int main(int argc, char* argv[], char* envp[]) {
             }else
             if(!strcmp(argv[i], "-U") || !strcmp(argv[i], "--chown")) {
                 opts->chown_=argv[i+1];
+                ++i;
+            }else
+            if(!strcmp(argv[i], "-h") || !strcmp(argv[i], "--chdir")) {
+                opts->chdir_=argv[i+1];
                 ++i;
             }else
             if(!strcmp(argv[i], "-R") || !strcmp(argv[i], "--chroot")) {
