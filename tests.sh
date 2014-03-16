@@ -278,7 +278,7 @@ E=4 MF= V='' t ./$DIVED_NAME --just-execute --rlimit cpu=qqq -- /bin/true
 announce    dived --rlimit nofile=10 enforcement '9>'
 E=0 MF= V='' t ./$DIVED_NAME --just-execute --rlimit nofile=10 -- /bin/sh -c '/bin/true 9> /dev/null'
 announce    dived --rlimit nofile=10 enforcement '10>'
-E=1 MF= V='' t ./$DIVED_NAME --just-execute --rlimit nofile=10 -- /bin/sh -c '/bin/true 10> /dev/null'
+E=fail MF= V='' t ./$DIVED_NAME --just-execute --rlimit nofile=10 -- /bin/sh -c '/bin/true 10> /dev/null'
 
 fi # TESTS_NO_USER
 
