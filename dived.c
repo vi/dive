@@ -169,10 +169,19 @@ int serve_client(int fd, struct dived_options *opts) {
     }
     #endif
     
-    if (opts->chdir_) {
+    DIR* chdir_here_after_chroot = NULL;
+    if (opts->chdir_ && !opts->chroot_) {
         int ret = chdir(opts->chdir_);
         if (ret==-1) {
             perror("chdir");
+            return 23;
+        }
+    }
+    // save away current directory before it is mangled by chroot
+    if (opts->chdir_ && opts->chroot_) {
+        chdir_here_after_chroot = opendir(opts->chdir_);
+        if (!chdir_here_after_chroot) {
+            perror("opendir for later chdir");
             return 23;
         }
     }
@@ -182,6 +191,14 @@ int serve_client(int fd, struct dived_options *opts) {
             perror("chroot");
             return 23;
         }
+    }
+    if (chdir_here_after_chroot) {
+        int ret = fchdir(dirfd(chdir_here_after_chroot));
+        if (ret==-1) {
+            perror("fchdir");
+            return 23;
+        }
+        closedir(chdir_here_after_chroot);
     }
     
     #ifndef NO_PIVOTROOT
