@@ -308,6 +308,10 @@ int serve_client(int fd, struct dived_options *opts) {
 
     int pid2 = fork();
 
+    if (pid2 == -1) {
+        perror("fork");
+    }
+
     if (!pid2) {
         /* Receive argv */
         int numargs, totallen;
@@ -465,6 +469,9 @@ retry_accept:
         int childpid = 0;
         if(!opts->nofork) {
             childpid = fork();
+            if (childpid == -1) {
+                perror("fork");
+            }
         }
 
         if(!childpid) {
