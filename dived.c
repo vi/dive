@@ -58,7 +58,7 @@
 #define MAXFD 1024
 
 #define VERSION 1100
-#define VERSION2 "v1.6.0"
+#define VERSION2 "v1.6.1"
 
 #define CLONE_STACK_SIZE  (1024*16)
 // For use with "--unshare"

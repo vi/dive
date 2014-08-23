@@ -1,3 +1,9 @@
+dive (1.6.1-1) unstable; urgency=low
+
+  * Fix handling of failing "fork"
+
+ -- Vitaly Shukela <vi0oss@gmail.com>  Sun, 24 Aug 2014 02:32:00 +0300
+
 dive (1.6.0-1) unstable; urgency=low
 
   * Add --chdir option
