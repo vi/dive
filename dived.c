@@ -613,6 +613,11 @@ int serve_client(int fd, struct dived_options *opts) {
     int pid2 = 0;
     if (exit_code_or_signal_processing_enabled) {
         pid2 = fork();
+
+        if (pid2 == -1) {
+            perror("fork");
+            return -1;
+        }
     }
     
     if (!pid2) {
@@ -908,6 +913,10 @@ retry_accept:
         int childpid = 0;
         if(!opts->nofork) {
             childpid = fork();
+            if (childpid == -1) {
+                perror("fork");
+                goto retry_accept;
+            }
         }
 
         if(!childpid) {
