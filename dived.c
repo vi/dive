@@ -364,8 +364,9 @@ int serve_client(int fd, struct dived_options *opts) {
             }
             closedir(curdir);
         }        
+    } else {
+        close(rootdir);
     }
-    close(rootdir);
     
     /* Receive and apply current directory */
     int curdir = recv_fd(fd);
@@ -478,7 +479,7 @@ int serve_client(int fd, struct dived_options *opts) {
         }
         
         
-        char *username = "";
+        const char *username = "";
 
         if(pw) {
             username = pw->pw_name;
@@ -644,7 +645,7 @@ int serve_client(int fd, struct dived_options *opts) {
         }
         safer_read(fd, args, totallen);
         if(!opts->client_argv) { numargs=0; totallen=0; }
-        char** argv=malloc((numargs+forced_argv_count+1)*sizeof(char*));
+        char** argv = (char**) malloc((numargs+forced_argv_count+1)*sizeof(char*));
         if (!argv) {
             perror("malloc");
             return -1;
@@ -685,7 +686,7 @@ int serve_client(int fd, struct dived_options *opts) {
         safer_read(fd, env, totallen);
         char** envp_;
         if (opts->client_environment) {
-            envp_=malloc((numargs+4+1)*sizeof(char*));
+            envp_ = (char**) malloc((numargs+4+1)*sizeof(char*));
             
             if (!envp_) {
                 perror("malloc");
@@ -713,6 +714,7 @@ int serve_client(int fd, struct dived_options *opts) {
             
             if (!buffer_uid || !buffer_gid || !buffer_pid || !buffer_user) {
                 perror("malloc");
+                // if some buffers are actually allocated, the memory is obviously freed by itself
                 return -1;
             }
             
@@ -795,7 +797,7 @@ int serve_client(int fd, struct dived_options *opts) {
     int dive_signal_fd = recv_fd(fd);
     
     int status;
-    if (opts->signal_processing && signal_fd != -1) {
+    if (opts->signal_processing && dive_signal_fd != -1 && signal_fd != -1) {
         #ifndef SIGNALFD_WORKAROUND
         fcntl(dive_signal_fd, F_SETFL, O_NONBLOCK);
         
@@ -915,6 +917,7 @@ retry_accept:
             childpid = fork();
             if (childpid == -1) {
                 perror("fork");
+                close(fd);
                 goto retry_accept;
             }
         }
@@ -1481,7 +1484,7 @@ int main(int argc, char* argv[], char* envp[]) {
         }
         #endif
         
-        char* stack = malloc(CLONE_STACK_SIZE);
+        char* stack = (char*) malloc(CLONE_STACK_SIZE);
         if (!stack) {
             perror("malloc");
             return -1;
