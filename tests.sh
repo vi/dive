@@ -153,7 +153,7 @@ rmdir testdir
 announce    --chdir option with -H
 prepare_dived --no-chdir --chdir testdir
 mkdir -p testdir
-E=0 V="`pwd`/testdir" t $DIVE_NAME test_dived /bin/pwd
+E=0 V="`pwd`/testdir" t ./$DIVE_NAME test_dived /bin/pwd
 rmdir testdir
 
 announce    Prepended args test
