@@ -2,3 +2,20 @@ language: c
 install:
 - make
 script: ./tests.sh
+
+
+env:
+  global:
+   # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
+   #   via the "travis encrypt" command using the project repo's public key
+   - secure: "HPsuKUSRgYtO1wat+dyUHF3GJPUnw1iTPPp+8Hi396WDoiAZLnJ/qsRhlzRudcoDTUqexfImGpcPugQx4L3zpkPxRvf6ruMiYmxVpM5oD8ZYC2GrO5THWZvSTOHYhNgrTEn77z38Eb40lrWLMYncnlb+udSO9Bk4fJhUxB8LVyo="
+
+addons:
+  coverity_scan:
+    project:
+      name: "vi/dive"
+      description: "Build submitted via Travis CI"
+    notification_email: vi0oss@gmail.com
+    build_command_prepend: "./configure; make clean"
+    build_command:   "make -j 4"
+    branch_pattern: coverity_scan
