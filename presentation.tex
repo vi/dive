@@ -1,0 +1,243 @@
+% compiling: pdflatex -shell-escape dive.tex
+
+\documentclass[aspectratio=43]{beamer}
+\usetheme{Berkeley}
+
+\usepackage{color}
+%\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{soul}
+\usepackage{dot2texi}
+\usepackage{tikz}
+\usepackage{color,listings}
+\usetikzlibrary{shapes,arrows}
+
+\lstset{
+    numberstyle=\ttfamily,
+    basicstyle=\ttfamily,
+    breaklines=true,
+    postbreak=\raisebox{0ex}[0ex][0ex]{\hspace{30pt}\ensuremath{\color{red}\hookrightarrow\space}}
+}
+\newcommand{\G}[1]{\colorbox{lightgray}{#1}}
+\newcommand{\C}{\lstinline}
+
+\title{Dive}
+\author{Vitaly\ \"\_Vi\"\ Shukela}
+\date{July 21, 2015}
+
+\AtBeginSection[] {
+\begin{frame} 
+    \frametitle{Presentation Outline}
+    \tableofcontents[currentsection]
+    \end{frame}
+}
+
+\begin{document}
+
+\begin{frame}
+    \titlepage
+\end{frame}
+
+\section{Initial rationale}
+
+\begin{frame}
+    \frametitle{History}
+    I was experimenting with LXC containers and found out that after stating the container it is tricky to launch some additional program into it.
+    \pause\\\vfill
+    The supposed way of doing this was configuring the network starting SSH server and using it:
+\end{frame}
+
+\begin{frame}[fragile]
+    \frametitle{LXC and sshd}
+    \begin{dot2tex}[autosize,scale=0.7] digraph G {
+        Terminal -> LXCExecute -> bash -> sshd
+        Terminal2 -> ssh
+        sshd -> bash2
+        ssh -> sshd [style=dashed]
+        LXCExecute [label="lxc-execute"]
+
+        subgraph cluster_i {
+            label="Inside container"
+            sshd
+            bash
+            bash2
+        }
+    } \end{dot2tex}
+\end{frame}
+
+\begin{frame}
+    \frametitle{History}
+    And I wanted this:
+\end{frame}
+
+
+\begin{frame}[fragile]
+    \frametitle{Direct}
+    \begin{dot2tex}[autosize,scale=0.8] digraph G {
+        Terminal -> LXCExecute -> bash
+        Terminal2 -> bash2
+        LXCExecute [label="lxc-execute"]
+
+        subgraph cluster_i {
+            label="Inside container"
+            bash
+            bash2
+        }
+    } \end{dot2tex}
+\end{frame}
+
+\begin{frame}
+    \frametitle{History}
+    I wanted to do it:
+    \begin{itemize}
+        \item Without using virtual network;
+        \item Without heavyweight additional programs;
+        \item Preserving all FDs, not just stdin/stdout/stderr;
+    \end{itemize}
+\end{frame}
+
+\section{Original dive}
+
+\begin{frame}
+    \frametitle{Initial dive}
+    So I implemented a program that listens a socket and allows remotely starting programs:
+    \begin{itemize}
+        \pause \item No TCP, only UNIX socket;
+        \pause \item Using sendfd/recvfd;
+        \pause \item No authentication, but preseving user (\C!SO_PEERCRED!);
+        \pause \item Preserving signals;
+        \pause \item Passing command line and environment variables as array;
+        \pause \item Preserving controlling terminal (1/2);
+        \pause \item \st{Preserving process parents} (failed);
+    \end{itemize}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Initial dive}
+    So, initial dive rationale is \\
+    \vfill
+    \Large{Poor man's SSHd for starting things inside lxc-execute}.
+\end{frame}
+
+\section{Updated rationale}
+
+\begin{frame}
+    \frametitle{History}
+    I finished playing with LXC at that moment, but used "dive" project as playground.\\
+    \vfill
+    \pause More features creeped in, so I created "nocreep" branch in Git to preserve "poor man's sshd" dive as a little program.
+\end{frame}
+
+\begin{frame}
+    \frametitle{Updated rationale}
+    The new rationale is:\\
+    \vfill
+    \Large{Be a tool for starting processes in various ways, like \emph{socat} is the tool for using sockets.}
+\end{frame}
+
+\section{Usage example: restrict suidbit}
+
+
+\begin{frame}
+    \frametitle{\C!PR_SET_NO_NEW_PRIVS!}
+    I don't like suidbit feature.
+    \pause  \vfill 
+    I want to start a program that should not be able to elevate it's privileges by filesystem means.
+    \pause \vfill
+    \G{\C!dived -J -S -T -P    -X    -- ./some_program arguments!}
+\end{frame}
+
+\section{Usage example: sudo}
+
+\begin{frame}
+    \frametitle{suid-less sudo}
+     I don't like suidbit feature.
+     \pause  \vfill I want to run large part of the system with suidbit forbidden (\C!-o nosuid!, \C!PR_SET_NO_NEW_PRIVS!).
+     \pause  \vfill But also want this part to elevate privileges in a controlled way.
+\end{frame}
+
+
+\begin{frame}
+    \frametitle{access to one root program for a specific user}
+    Let's give someuser access to run some\_program\_only as root without using setuid.
+    \pause \vfill
+    \G{\C!dived /home/someuser/poormansudo -d -C 700 -U someuser:someuser -E -P -- /usr/bin/some_program_only!}
+    \pause \vfill
+    \G{\C!dive ./poormansudo --some --arguments!}
+\end{frame}
+
+\begin{frame}
+    \frametitle{give anybody chroot, but revoke setuid magic}
+    
+    I like to use \C!chroot! for development and don't want to change to root every time.
+
+    \pause \vfill
+    \G{\C!dived /var/run/chrooter -d -C 777 -X -r!}
+    \pause \vfill
+    \G{\C!DIVE_ROOTDIR=/home/user/system dive /var/run/chrooter /bin/bash !}
+\end{frame}
+
+\section{Usage example: unshare}
+
+\begin{frame}
+    \frametitle{namespace handling}
+    Let's become poor man's LXC.
+    \pause \vfill
+    Start a "container":\\
+    \G{\C!dived -J -S -T -P  -s net,fs -- /bin/bash!}
+    \pause \vfill
+    Start additional program into that container:\\
+    \G{\C!dived -J -S -T -P  -N /proc/12345/ns/net -N /proc/12345/ns/mnt -- /bin/bash!}
+\end{frame}
+
+\section{Feature list}
+
+\begin{frame}
+    \frametitle{Feature list}
+    \begin{itemize}
+        \item Starting programs directly ...
+        \item ... or initiated by socket
+        \hspace{20pt} \begin{itemize} 
+            \item Preservation of argv and envp arrays
+            \item Preservation of controlling terminal (limited)
+            \item Preservation of uid/gid (initializing other groups)
+            \item Signal preservation
+            \item Waiting for termination of a remotely started process
+            \item inetd mode
+            \item Abstract sockets
+        \end{itemize}
+        \item Capability, securebits and \C!PR_SET_NO_NEW_PRIVS! management
+        \item Namespace management
+        \item "authenticate" feature
+        \item Resource (rlimit) management
+        \item Creation of pidfile
+        \item Chrooting
+        \item Saving of pidfile
+    \end{itemize}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Current omissions}
+    TODO:
+    \vfill
+    \begin{itemize}
+        \item Sane command line argument handling
+        \item Full-coverage tests
+        \item Cgroups management
+        \item Distribution package inclusions
+        \item Refactoring
+    \end{itemize}
+\end{frame}
+
+\section{Conclusion}
+
+\begin{frame}
+    Dive is a project that helps to start programs in a light-weight, but versatile way.\\
+    \vfill
+    \C!https://github.com/vi/dive!\\
+    \vfill
+    \centerline{\LARGE{The end.}}
+\end{frame}
+
+\end{document}
+
