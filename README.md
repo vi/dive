@@ -79,7 +79,7 @@ Usage: dive socket_path [program arguments]
 * Chroot / CLONE_NEW... / forced command line
 * Setting of DIVE_USER and other variables according to client credentials
 * Allowing clients to set it's own root directory ("-r" option)
-* Setting of PR_SET_NO_NEW_PRIVS to turn off filesystem-based permission elevations
+* Setting of PR_SET_NO_NEW_PRIVS to turn off filesystem-based permission elevations. If you want just this without the rest dive features, use this: https://gist.github.com/vi/f977cc3097d47b07c3ad
 * Setting Linux capabilities
 * "Just execute" feature to use capabilities, chroot, PR_SET_NO_NEW_PRIVS
  setup; "authenticate", pidfile and so on without any "remote startup" thought
