@@ -186,6 +186,19 @@ Accept once, serve only one client. Useful for debugging or for starting the
 requested process with pid=1 in PID namespace.
 
 .TP
+.B  -g, --groups
+setgid to this group instead of the client's SO_PEERCRED-obtained gid.
+Also setgroups(2) to the specified comma-separated list of groups.
+With both -u specified to a numeric uid and -g specified to a list of numeric gids, 
+dived should operate independently of /etc/passwd and /etc/group files.
+
+Example:
+
+# dived -J -S -T -u 123213 -g man,9999,43  -- /usr/bin/id
+
+uid=123213 gid=12(man) groups=12(man),43(utmp),9999
+
+.TP
 .B -h, --chdir          
 Set this directory as current. If both --chdir and --chroot are specified, we 
 remember the specified directory before chroot, but chdir to it after the chroot.
@@ -351,6 +364,7 @@ Both user and group must be specified. They can be numeric.
 .TP
 .B  -u, --user
 setuid to this user instead of the client's SO_PEERCRED-obtained uid.
+Unless --group is also specified, initialize groups with initgroups(3).
 
 
 

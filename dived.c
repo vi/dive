@@ -57,6 +57,9 @@
 /* Maximum FD number */
 #define MAXFD 1024
 
+/* Maximum number of groups specified by --groups */
+#define MAXGROUPS 128
+
 #define VERSION 1100
 #define VERSION2 "v1.6.2"
 
@@ -90,6 +93,7 @@ struct dived_options {
     int nosetsid;
     int nocsctty;
     char* forceuser;
+    char* forcegroups;
     char* effective_user;
     char* pidfile;
     char* chmod_;
@@ -444,19 +448,55 @@ int serve_client(int fd, struct dived_options *opts) {
     
     /* Change into the appropriate user*/
     if(!opts->noprivs) {
-        struct passwd *pw;                
+        struct passwd *pw = NULL;                
         uid_t targetuid = cred.uid;
         gid_t targetgid = cred.gid;
 
         
         if (opts->forceuser) {
-            pw = getpwnam(opts->forceuser);
-            if (pw) {
-                targetuid = pw->pw_uid;
-                targetgid = pw->pw_gid;
+            if (!opts->forcegroups) {
+                pw = getpwnam(opts->forceuser);
+                if (pw) {
+                    targetuid = pw->pw_uid;
+                    targetgid = pw->pw_gid;
+                } else {
+                    targetuid = -1;
+                    fprintf(stderr, "Failed to getpwnam the specified user\n");
+                    fprintf(stderr, "If you want to set uid by number then also specify --groups \n");
+                    return 112;
+                }
             } else {
-                fprintf(stderr, "Failed to getpwnam the specified user\n");
-                return 112;
+                targetuid = -1;
+                sscanf(opts->forceuser, "%d", &targetuid);
+                
+                
+                if (targetuid == -1) {
+                    struct passwd *userp = getpwnam(opts->forceuser);
+                    if (!userp) {
+                        fprintf(stderr, "User %s not found (and is not a numeric uid)\n", opts->forceuser);
+                        return 13;
+                    }
+                    targetuid = userp->pw_uid;
+                }
+                
+                targetgid = -1;
+                sscanf(opts->forcegroups, "%u", &targetgid);
+                
+                
+                if (targetgid == -1) {
+                    char first_group_name_without_comma[256];
+                    snprintf(first_group_name_without_comma, sizeof first_group_name_without_comma, "%s", opts->forcegroups);
+                    if (strchr(first_group_name_without_comma, ',')) {
+                        *strchr(first_group_name_without_comma, ',') = 0;
+                    }
+                        
+                    struct group *groupp = getgrnam(first_group_name_without_comma);
+                    if (!groupp) {
+                        fprintf(stderr, "Group %s not found (and is not a numeric gid)\n", first_group_name_without_comma);
+                        return 13;
+                    }
+                    targetgid = groupp->gr_gid;
+                }
             }
         } else {
             /* By default it is user at the other end of the connection */
@@ -555,7 +595,36 @@ int serve_client(int fd, struct dived_options *opts) {
         }
         #endif
         
-        initgroups(username, targetgid);
+        if (!opts->forcegroups) {
+            if (initgroups(username, targetgid) == -1) {
+                perror("initgroups");
+                return -1;
+            }
+        } else {
+            gid_t groups[MAXGROUPS];
+            int group_count = 0;
+            
+            char *saveptr_commas;
+            char* q = strtok_r(opts->forcegroups, ",", &saveptr_commas);
+            for(; q && group_count < MAXGROUPS; q=strtok_r(NULL, ",", &saveptr_commas)) {
+                unsigned int gid = -1;
+                sscanf(q, "%u", &gid);
+                if (gid == -1) {
+                    struct group *groupp = getgrnam(q);
+                    if (!groupp) {
+                        fprintf(stderr, "Group %s not found (and is not a numeric uid)\n", q);
+                        return 13;
+                    }
+                    gid = groupp->gr_gid;
+                }
+                groups[group_count] = gid;
+                ++group_count;
+            }
+            if (setgroups(group_count, groups) == -1) {
+                perror("setgroups");
+                return -1;
+            }
+        }
         if (!opts->effective_user) {
             if(setgid(targetgid) == -1) { perror("setgid"); return -1; }
             if(setuid(targetuid) == -1) { perror("setuid"); return -1; }
@@ -956,6 +1025,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("                                this is for debugging or for starting init process in PID unshare\n");
         printf("          -P --no-setuid        no setuid/setgid/etc\n");
         printf("          -u --user             setuid to this user instead of the client\n");
+        printf("          -g --groups           setgid/setgroups to this comma-separated groups. The first one is primary.\n");
         printf("          -e --effective-user   seteuid to this user instead of the client\n");
         printf("          -B --retain-capabilities Remove all capabilities from bounding set\n");
         printf("                                   except of specified ones\n");
@@ -1012,6 +1082,7 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->nosetsid=0;
     opts->nocsctty=0;
     opts->forceuser=NULL;
+    opts->forcegroups=NULL;
     opts->effective_user=NULL;
     opts->pidfile=NULL;
     opts->chmod_=NULL;
@@ -1075,6 +1146,10 @@ int main(int argc, char* argv[], char* envp[]) {
             }else
             if(!strcmp(argv[i], "-u") || !strcmp(argv[i], "--user")) {
                 opts->forceuser=argv[i+1];
+                ++i;
+            }else
+            if(!strcmp(argv[i], "-g") || !strcmp(argv[i], "--groups")) {
+                opts->forcegroups=argv[i+1];
                 ++i;
             }else
             if(!strcmp(argv[i], "-e") || !strcmp(argv[i], "--effective-user")) {
@@ -1293,6 +1368,10 @@ int main(int argc, char* argv[], char* envp[]) {
             fprintf(stderr, "Set DIVED_NOSANITYCHECK to force insecure mode.\n");
             return 4;
         }
+        if (!opts->forceuser && opts->forcegroups) {
+            fprintf(stderr, "--groups won't work without --user\n");
+            return 4;
+        }
     
         int permissive_chmod = 0;
         int no_privs = 0;
@@ -1406,7 +1485,7 @@ int main(int argc, char* argv[], char* envp[]) {
             /* not a number */
             struct passwd *userp = getpwnam(usern);
             if (!userp) {
-                fprintf(stderr, "User %s not found (and not a number)\n", usern);
+                fprintf(stderr, "User %s not found (and not a numeric uid)\n", usern);
                 return 12;
             }
             targetuid = userp->pw_uid;
@@ -1417,7 +1496,7 @@ int main(int argc, char* argv[], char* envp[]) {
         if (errno || endnum == groupn || *endnum) {
             struct group *groupp = getgrnam(groupn);
             if (!groupp) {
-                fprintf(stderr, "Group %s not found (and not a number)\n", groupn);
+                fprintf(stderr, "Group %s not found (and not a numeric gid)\n", groupn);
                 return 13;
             }
             targetgid = groupp->gr_gid;
