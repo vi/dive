@@ -596,9 +596,11 @@ int serve_client(int fd, struct dived_options *opts) {
         #endif
         
         if (!opts->forcegroups) {
-            if (initgroups(username, targetgid) == -1) {
-                perror("initgroups");
-                return -1;
+            if (targetuid != getuid() || targetgid != getgid()) {
+                if (initgroups(username, targetgid) == -1) {
+                    perror("initgroups");
+                    return -1;
+                }
             }
         } else {
             gid_t groups[MAXGROUPS];
