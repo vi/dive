@@ -1,3 +1,10 @@
+dive (1.6.3-1) unstable; urgency=low
+
+  * Add --groups option
+  * Fix tests
+
+ -- Vitaly Shukela <vi0oss@gmail.com>  Mon, 30 May 2016 20:32:00 +0300
+
 dive (1.6.1-1) unstable; urgency=low
 
   * Fix handling of failing "fork"
