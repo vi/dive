@@ -264,6 +264,16 @@ set and lock SECBIT_NO_SETUID_FIXUP and SECBIT_NOROOT
 This makes root user (uid=0) non-special for the kernel. 
 To be used in conjunction with capabilities (-B and -c options).
 
+.TP
+.B -m, --ambient-capabilities  
+
+Make specified permitted and inheritable capabilities ambient, allowing them to be preserved across execve.
+
+Minimum Linux kernel version is 4.3
+
+Example: 
+
+USER=vi HOME=/home/vi dived -J -S -T -c CAP_NET_BIND_SERVICE+ip -m CAP_NET_BIND_SERVICE -u vi -- bash
 
 .TP
 .B -M, --no-umask        
