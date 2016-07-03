@@ -180,7 +180,7 @@ alice$
 
 <h2>"Just run" example</h2>
 
-<p>There are many options in dived that affect what happens before the program begin execve'd. --just-run option allow use them without messing with UNIX sockets.</p>
+<p>There are many options in dived that affect what happens before the program begin execve'd. --just-execute option allow use them without messing with UNIX sockets.</p>
 
 <p>In this mode dived works as poor man's:
 <ul>
@@ -207,6 +207,31 @@ ping: icmp open socket: Operation not permitted
 
 <pre><code>root# setcap =ei /root/ping
 root# dived -J -S -T -u nobody -X -c "= cap_net_raw+ip" -- /root/ping 127.0.0.1</code></pre>
+
+
+<h4> Grant capability for opening port lower than 1024 </h4>
+
+<p>Selectively enable particular capability for user/shell without messing with filesystem capabilities</p>
+
+<p>It uses <a href="https://lwn.net/Articles/636533/">ambient capabilities</a> which should be available starting from Linux 4.3</p>
+
+<pre><code>root# HOME=/home/vi USER=vi dived  --just-execute \
+         --no-setsid --no-csctty  \
+         --set-capabilities CAP_NET_BIND_SERVICE+ip \
+         --ambient-capabilities CAP_NET_BIND_SERVICE \
+         --user vi \
+         -- /bin/bash
+vi$ cat /proc/self/status | grep Cap
+CapInh:	0000000000000400
+CapPrm:	0000000000000400
+CapEff:	0000000000000400
+CapBnd:	0000003fffffffff
+CapAmb:	0000000000000400
+vi$ nc -nvlp 1
+listening on [any] 1 ...
+^C
+
+</code></pre>
 
 <h4>Starting another "init"</h4>
 
@@ -239,6 +264,7 @@ root# /etc/init.d/openbsd-inetd reload
 
 <h1> Pre-built binaries </h1>
 <a name="prebuiltbinaries"></a>
+Old versions, not all features may be present.
 <table>
 <tr class="bl"><td>14K</td><td class="la"><a href="http://vi-server.org/pub/dive">Download pre-built x86 dive</a></td></tr>
 <tr class="bl"><td>26K</td><td class="la"><a href="http://vi-server.org/pub/dived">Download pre-built x86 dived</a></td></tr>
