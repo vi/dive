@@ -280,14 +280,25 @@ Old versions, not all features may be present.
 <tr class="bl"><td>27K</td><td class="la"><a href="http://vi-server.org/debian/dists/squeeze/vi/binary-armel/dive_1.2-2_armel.deb">Download pre-built armel Debian squeeze package</a></td></tr>
 </table>
 
-<p>You can also connect my debian repository for source and binary dive packages:</p>
+<p>You can also connect my debian repository for a source dive package:</p>
 
 <pre><code>gpg  --keyserver pgp.mit.edu --recv 0xF30DBAED1DE672D2 && gpg --export F30DBAED1DE672D2 | apt-key add -
 
 cat >> /etc/apt/sources.list.d/vi.list << \EOF
-deb http://vi-server.org/debian squeeze vi
-deb-src http://vi-server.org/debian squeeze vi
+deb-src http://vi-server.org/debian vi vi
 EOF
+
+apt-get update -o Dir::Etc::sourcelist=sources.list.d/vi.list -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0
+
+apt-get source dive
+
+apt-get build-dep dive
+
+cd dive-*
+
+dpkg-buildpackage -us -uc
+
+dpkg -i ../dive*.deb
 </code></pre>
 
         <footer>
