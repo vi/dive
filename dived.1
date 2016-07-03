@@ -72,7 +72,7 @@ like:
 .SH OPTIONS
 
 The first command line argument must be the socket (filesystem or @abstract) path
-or "-i" (--inetd)  or "-J" (--just-run).
+or "-i" (--inetd)  or "-J" (--just-execute).
 
 All the rest options should each take separate element of argv (no short options 
 combining supported). Option's arguments are the next argv element
@@ -233,7 +233,7 @@ This allows anybody who can access /var/run/qqq.dive to run commands as user qqq
 
 
 .TP
-.B -J, --just-run
+.B -J, --just-execute
 Don't use the socket at all (don't receive file descriptors, argv, environment),
 just start (execve) the program right away.
 
