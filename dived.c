@@ -61,7 +61,7 @@
 #define MAXGROUPS 128
 
 #define VERSION 1100
-#define VERSION2 "v1.6.3"
+#define VERSION2 "v1.7"
 
 #define CLONE_STACK_SIZE  (1024*16)
 // For use with "--unshare"
@@ -116,6 +116,7 @@ struct dived_options {
     char* authentication_program;
     char* retain_capabilities;
     char* remove_capabilities;
+    char* ambient_capabilities;
     char* set_capabilities;
     int no_new_privs;
     int just_execute;
@@ -649,6 +650,26 @@ int serve_client(int fd, struct dived_options *opts) {
         }
         cap_free(c);
     }
+    
+    if (opts->ambient_capabilities) {
+        char* q = strtok(opts->ambient_capabilities, ",");
+        for(; q; q=strtok(NULL, ",")) {
+            cap_value_t c=-1;
+            cap_from_name(q, &c);
+            if(c==-1) {
+                perror("cap_from_name");
+                return -1;
+            }
+#ifndef PR_CAP_AMBIENT
+#define PR_CAP_AMBIENT 47
+#define PR_CAP_AMBIENT_RAISE 2
+#endif
+            if(prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_RAISE, c, 0, 0)==-1) {
+                perror("prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_RAISE)");
+                return -1;
+            }
+        }
+    }
     #endif
     
     if (opts->no_new_privs) {
@@ -1015,7 +1036,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("Listen UNIX socket and start programs for each connected client, redirecting fds to client.\n");        
         printf("Usage: dived {socket_path|@abstract_address|-i|-J} [-p pidfile] [-u user] [-e effective_user] "
                "[-C mode] [-U user:group] [{-R directory | -V newroot putold}] [-r [-W]] [-s smth1,smth2,...] [-a \"program\"] "
-               "[{-B cap_smth1,cap_smth2|-b cap_smth1,cap_smth2}] [-X] [-c 'cap_smth+eip cap_smth2+i'] "
+               "[{-B cap_smth1,cap_smth2|-b cap_smth1,cap_smth2}] [-m cap_smth1,...] [-X] [-c 'cap_smth+eip cap_smth2+i'] "
                "[-N /proc/.../ns/net [-N ...]] [-l res_name1=hard1,4=0,res_name2=hard2:soft2,...] "
                "[various other argumentless options] [-- prepended commandline parts]\n");
         printf("          -d --detach           detach\n");
@@ -1032,6 +1053,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -B --retain-capabilities Remove all capabilities from bounding set\n");
         printf("                                   except of specified ones\n");
         printf("          -b --remove-capabilities Remove capabilities from bounding set\n");
+        printf("          -m --ambient-capabilities Set these capabilities as ambient\n");
         printf("          -c --set-capabilities cap_set_proc the argument (like 'cap_smth+eip cap_smth2+i')\n"); 
         printf("          -X --no-new-privs     set PR_SET_NO_NEW_PRIVS\n");
         printf("          -L --lock-securebits  set and lock SECBIT_NO_SETUID_FIXUP and SECBIT_NOROOT\n");
@@ -1107,6 +1129,7 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->authentication_program = NULL;
     opts->retain_capabilities = NULL;
     opts->remove_capabilities = NULL;
+    opts->ambient_capabilities = NULL;
     opts->no_new_privs = 0;
     opts->just_execute = 0;
     opts->lock_securebits = 0;
@@ -1327,6 +1350,10 @@ int main(int argc, char* argv[], char* envp[]) {
                 opts->remove_capabilities = argv[i+1];
                 ++i;
             }else
+            if(!strcmp(argv[i], "-m") || !strcmp(argv[i], "--ambient-capabilities")) {
+                opts->ambient_capabilities = argv[i+1];
+                ++i;
+            }else
             if(!strcmp(argv[i], "-X") || !strcmp(argv[i], "--no-new-privs")) {
                 opts->no_new_privs = 1;
             }else
@@ -1407,7 +1434,7 @@ int main(int argc, char* argv[], char* envp[]) {
     }
     
     #ifdef NO_CAPABILITIES       
-    if (opts->set_capabilities || opts->retain_capabilities || opts->remove_capabilities) {
+    if (opts->set_capabilities || opts->retain_capabilities || opts->remove_capabilities || opts->ambient_capabilities) {
         fprintf(stderr, "Capabilities are not enabled for this build\n");
         return 17;
     }
