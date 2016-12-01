@@ -301,7 +301,7 @@ NOBODY_UID=`cat /etc/passwd | grep '^nobody:' | cut -d: -f3`
 echo "NOBODY_UID=$NOBODY_UID"
 
 announce can we change to other user?
-E=0 V=$NOBODY_UID t su nobody -c 'id -u'
+E=0 V=$NOBODY_UID t su -s /bin/sh nobody -c 'id -u'
 
 
 VERBOSE=1
@@ -322,52 +322,52 @@ E=0 V=765 t stat test_dived -c '%a'
 
 announce dived --chown option actual
 prepare_dived  --chown $NOBODY_UID:0
-E=0 V=qqq t su nobody -c './$DIVE_NAME test_dived /bin/echo qqq' 
+E=0 V=qqq t su nobody -s /bin/sh -c './$DIVE_NAME test_dived /bin/echo qqq' 
 
 announce dived --chown name option actual
 prepare_dived  --chown nobody:0
-E=0 V=qqq t su nobody -c './$DIVE_NAME test_dived /bin/echo qqq' 
+E=0 V=qqq t su nobody -s /bin/sh -c './$DIVE_NAME test_dived /bin/echo qqq' 
 
 announce dived --chmod option actual
 prepare_dived  --chmod 777
-E=0 V=qqq t su nobody -c './$DIVE_NAME test_dived /bin/echo qqq' 
+E=0 V=qqq t su nobody -s /bin/sh -c './$DIVE_NAME test_dived /bin/echo qqq' 
 
 
 announce dived preserve user by default
 prepare_dived  --chown $NOBODY_UID:0
-E=0 V=$NOBODY_UID t su nobody -c './$DIVE_NAME test_dived /usr/bin/id -u' 
+E=0 V=$NOBODY_UID t su -s /bin/sh nobody -c './$DIVE_NAME test_dived /usr/bin/id -u' 
 
 
 announce dived sets up groups
 prepare_dived  --chown $NOBODY_UID:0
-E=0 V=`su nobody bash -c id` t su nobody -c './$DIVE_NAME test_dived /usr/bin/id'
+E=0 V=`su nobody -s /bin/sh bash -c id` t su -s /bin/sh nobody -c './$DIVE_NAME test_dived /usr/bin/id'
 
 announce dived -P does not touch things
 prepare_dived  --chown $NOBODY_UID:0 --no-setuid
-E=0 V=`id` t su nobody -c './$DIVE_NAME test_dived /usr/bin/id'
+E=0 V=`id` t su nobody -s /bin/sh -c './$DIVE_NAME test_dived /usr/bin/id'
 
 announce dived -u works
 prepare_dived  --chown $NOBODY_UID:0 --user root
-E=0 V=`id` t su nobody -c './$DIVE_NAME test_dived /usr/bin/id'
+E=0 V=`id` t su nobody -s /bin/sh -c './$DIVE_NAME test_dived /usr/bin/id'
 
 announce dived -u works 2
 prepare_dived  --chown $NOBODY_UID:0 --user nobody
-E=0 V=`su nobody bash -c id` t su nobody -c './$DIVE_NAME test_dived /usr/bin/id'
+E=0 V=`su nobody -s /bin/sh bash -c id` t su nobody -s /bin/sh -c './$DIVE_NAME test_dived /usr/bin/id'
 
 announce dived -e works
 prepare_dived  --chown $NOBODY_UID:0 --effective-user root
 E=0 V="uid=$NOBODY_UID(nobody) euid=0(root) " t \
-    su nobody -c './$DIVE_NAME test_dived /usr/bin/id | tr " " "\n" | grep "^euid\|^uid" | tr "\n" " "'
+    su nobody -s /bin/sh -c './$DIVE_NAME test_dived /usr/bin/id | tr " " "\n" | grep "^euid\|^uid" | tr "\n" " "'
 
 announce dived -u -e works
 prepare_dived  --chown $NOBODY_UID:0 --effective-user root --user nobody
 E=0 V="uid=$NOBODY_UID(nobody) euid=0(root) " t \
-    su nobody -c './$DIVE_NAME test_dived /usr/bin/id | tr " " "\n" | grep "^euid\|^uid" | tr "\n" " "'
+    su nobody -s /bin/sh -c './$DIVE_NAME test_dived /usr/bin/id | tr " " "\n" | grep "^euid\|^uid" | tr "\n" " "'
 
 announce dived -u -e works 2
 prepare_dived  --chown $NOBODY_UID:0 --effective-user nobody --user root
 E=0 V="uid=0(root) euid=$NOBODY_UID(nobody) " t \
-    su nobody -c './$DIVE_NAME test_dived /usr/bin/id | tr " " "\n" | grep "^euid\|^uid" | tr "\n" " "'
+    su nobody -s /bin/sh -c './$DIVE_NAME test_dived /usr/bin/id | tr " " "\n" | grep "^euid\|^uid" | tr "\n" " "'
 
 announce "Removing capabilities from bounding set (-B)"
 E=0 MF=1 V="0000000" t ./$DIVED_NAME -J --retain-capabilities '' -- /bin/sh -c "cat /proc/self/status | grep CapBnd | cut -c 18-"
