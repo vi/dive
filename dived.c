@@ -66,6 +66,7 @@
 #define CLONE_STACK_SIZE  (1024*16)
 // For use with "--unshare"
 
+// list of FDs that should be closed for non-client process
 int saved_fdnums[MAXFD];
 
 extern char **environ;
@@ -144,16 +145,32 @@ int pivot_root(const char* newroot, const char* putold) {
 #endif
 #endif // NO_PIVOTROOT
 
-int serve_client(int fd, struct dived_options *opts) {
-    int ret;
-    (void)ret;
+struct serve_client_context {
+    int fd;
+    struct ucred cred;
+    struct passwd *client_cred;
+    int terminal_fd;
+    const char* username;
+    uid_t effective_user;
+    gid_t effective_group;
+    uid_t targetuid;
+    gid_t targetgid;
     
     /* When we receive and apply (dup2) file descriptors, it can happen that we need to replace the fd itself.
      * In this postpone applying it until we close "fd" */
-    int debt_instead_of_fd = -1;
-    
-    int exit_code_or_signal_processing_enabled = opts->fork_and_wait_for_exit_code && !opts->just_execute;
+    int debt_instead_of_fd;
 
+    int exit_code_or_signal_processing_enabled;
+    int initialisation_finished_event[2];
+    int signal_fd;
+    int pid2;
+    char** argv;
+    char** envp_;
+    int dive_signal_fd;
+};
+
+
+int serve_client_setns(struct dived_options *opts, struct serve_client_context *ctx) {
     #ifndef NO_SETNS
     { 
         int i;
@@ -173,7 +190,10 @@ int serve_client(int fd, struct dived_options *opts) {
         }
     }
     #endif
-    
+    return 0;
+}
+
+int serve_client_opt_chdir_chroot(struct dived_options *opts, struct serve_client_context *ctx) {
     DIR* chdir_here_after_chroot = NULL;
     if (opts->chdir_ && !opts->chroot_) {
         int ret = chdir(opts->chdir_);
@@ -215,42 +235,49 @@ int serve_client(int fd, struct dived_options *opts) {
         }
     }
     #endif // NO_PIVOTROOT
-    
-    struct ucred cred;
+    return 0;
+}
+
+int serve_client_getcred(struct dived_options *opts, struct serve_client_context *ctx) {
     socklen_t len = sizeof(struct ucred);
-    struct passwd *client_cred = NULL;
     
     if (!opts->just_execute) {
     
-    if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) == -1) {
+    if (getsockopt(ctx->fd, SOL_SOCKET, SO_PEERCRED, &ctx->cred, &len) == -1) {
         perror("getsockopt SOL_SOCKET SO_PEERCRED");
         if (!opts->noprivs) {
             return 23;
         }
     } else {
-        client_cred = getpwuid(cred.uid);
+        ctx->client_cred = getpwuid(ctx->cred.uid);
     }
     
     } else {
         // --just-execute
-        cred.uid = getuid();
-        cred.gid = getgid();
-        cred.pid = getpid();
+        ctx->cred.uid = getuid();
+        ctx->cred.gid = getgid();
+        ctx->cred.pid = getpid();
     }
+    return 0;
+}
+
+int serve_client_set_dive_envvars(struct dived_options *opts, struct serve_client_context *ctx) {
     {
         char buffer[64];
-        sprintf(buffer, "%d", cred.uid); setenv("DIVE_UID", buffer, 1);
-        sprintf(buffer, "%d", cred.gid); setenv("DIVE_GID", buffer, 1);
-        sprintf(buffer, "%d", cred.pid); setenv("DIVE_PID", buffer, 1);
-        if (client_cred) {
-            setenv("DIVE_USER", client_cred->pw_name, 1);
+        sprintf(buffer, "%d", ctx->cred.uid); setenv("DIVE_UID", buffer, 1);
+        sprintf(buffer, "%d", ctx->cred.gid); setenv("DIVE_GID", buffer, 1);
+        sprintf(buffer, "%d", ctx->cred.pid); setenv("DIVE_PID", buffer, 1);
+        if (ctx->client_cred) {
+            setenv("DIVE_USER", ctx->client_cred->pw_name, 1);
         } else {
             setenv("DIVE_USER", "", 1);
         }
     }
+    //printf("pid=%ld, euid=%ld, egid=%ld\n", (long) ctx->cred.pid, (long) ctx->cred.uid, (long) ctx->cred.gid);
+    return 0;
+}
 
-    //printf("pid=%ld, euid=%ld, egid=%ld\n", (long) cred.pid, (long) cred.uid, (long) cred.gid);
-    
+int serve_client_daemon(struct dived_options *opts, struct serve_client_context *ctx) {
     if(!opts->nochilddaemon) {
         int ret = daemon(0,0);
         if (ret==-1) {
@@ -258,37 +285,37 @@ int serve_client(int fd, struct dived_options *opts) {
             // considering this error as non-important and not exiting
         }
     }
+    return 0;
+}
     
-    int terminal_fd = -1;
-    
-    if (!opts->just_execute) {
+int serve_client_recv_fds_flags(struct dived_options *opts, struct serve_client_context *ctx) {
 
     long int version = VERSION;
-    safer_write(fd, (char*)&version, sizeof(version));
+    safer_write(ctx->fd, (char*)&version, sizeof(version));
     
     /* Send pid */
     pid_t mypid = getpid();
-    safer_write(fd, (char*)&mypid, sizeof(mypid));
+    safer_write(ctx->fd, (char*)&mypid, sizeof(mypid));
 
     /* Receive file descriptor to be controlling terminal */
-    terminal_fd = recv_fd(fd);
+    ctx->terminal_fd = recv_fd(ctx->fd);
     
     
     /* Receive flag whether client wants us to stay and wait for exit code */
     int waiting_requested;
-    safer_read(fd, (char*)&waiting_requested, sizeof(waiting_requested));
+    safer_read(ctx->fd, (char*)&waiting_requested, sizeof(waiting_requested));
     
-    if (!waiting_requested) exit_code_or_signal_processing_enabled=0;
+    if (!waiting_requested) ctx->exit_code_or_signal_processing_enabled=0;
         
     /* Send whether we will wait for the client */
-    safer_write(fd, (char*)&exit_code_or_signal_processing_enabled, sizeof(exit_code_or_signal_processing_enabled));
+    safer_write(ctx->fd, (char*)&ctx->exit_code_or_signal_processing_enabled, sizeof(ctx->exit_code_or_signal_processing_enabled));
 
     /* Receive and apply file descriptors */
     int received_fd_count = 0;
     memset(saved_fdnums, 0, sizeof saved_fdnums);
     for(;;) {
         int i;
-        safer_read(fd, (char*)&i, sizeof(i));
+        safer_read(ctx->fd, (char*)&i, sizeof(i));
         if(i==-1) {
             break;
         }                    
@@ -296,7 +323,7 @@ int serve_client(int fd, struct dived_options *opts) {
             fprintf(stderr, "dived: Wrong file descriptor number %d\n", i);
             return 7;
         }
-        int f = recv_fd(fd);                
+        int f = recv_fd(ctx->fd);                
         if (!opts->client_fds) {
             close(f);
             continue;
@@ -307,8 +334,8 @@ int serve_client(int fd, struct dived_options *opts) {
             continue;
         }
         ++received_fd_count;
-        if(i==fd) {
-            debt_instead_of_fd=f;
+        if(i==ctx->fd) {
+            ctx->debt_instead_of_fd=f;
         } else {
             if(f!=i) {
                 if(dup2(f, i)==i) {
@@ -322,24 +349,30 @@ int serve_client(int fd, struct dived_options *opts) {
             }
         }
     }
-    
-    }  // !--just-execute
+    return 0;
+}
 
+int serve_client_auth_prog(struct dived_options *opts, struct serve_client_context *ctx) {
     if (opts->authentication_program) {
         if (system(opts->authentication_program)) {
             return 1;
         }
     }
+    return 0;
+}
 
-    if (!opts->just_execute) {
-    
+int serve_client_umask(struct dived_options *opts, struct serve_client_context *ctx) {
     /* Receive and apply umask */
     mode_t umask_;
-    safer_read(fd, (char*)&umask_, sizeof(umask_));
+    safer_read(ctx->fd, (char*)&umask_, sizeof(umask_));
     if (opts->client_umask) umask(umask_);
     
+    return 0;
+}
+    
+int serve_client_rootdir(struct dived_options *opts, struct serve_client_context *ctx) {
     /* Receive and apply root directory */
-    int rootdir = recv_fd(fd);
+    int rootdir = recv_fd(ctx->fd);
     if (opts->client_chroot) {
         DIR* curdir = NULL;
         if (!opts->client_chdir) {
@@ -372,9 +405,12 @@ int serve_client(int fd, struct dived_options *opts) {
     } else {
         close(rootdir);
     }
+    return 0;
+}
     
+int serve_client_curdir(struct dived_options *opts, struct serve_client_context *ctx) {
     /* Receive and apply current directory */
-    int curdir = recv_fd(fd);
+    int curdir = recv_fd(ctx->fd);
     if (!opts->root_to_current) {
         if (opts->client_chdir) {
             int ret = fchdir(curdir);
@@ -394,26 +430,32 @@ int serve_client(int fd, struct dived_options *opts) {
         }
     }
     close(curdir);
-    
-    } // !--just-execute
+    return 0;
+}
 
-
+int serve_client_setsid(struct dived_options *opts, struct serve_client_context *ctx) {
     if (!opts->nosetsid) {
         setpgid(0, getppid());
         setsid();
     }
+    return 0;
+}
+int serve_client_csctty(struct dived_options *opts, struct serve_client_context *ctx) {
     if (!opts->nocsctty) {
-        if (terminal_fd != -1) {
+        if (ctx->terminal_fd != -1) {
             #ifndef TIOCSCTTY
             #define TIOCSCTTY 0x540E
             #endif
-            ioctl (terminal_fd, TIOCSCTTY, 1);
+            ioctl (ctx->terminal_fd, TIOCSCTTY, 1);
         }
     }
 
-    close(terminal_fd);
+    close(ctx->terminal_fd);
+    return 0;
+}
 
 
+int serve_client_securebits(struct dived_options *opts, struct serve_client_context *ctx) {
     #ifndef NO_CAPABILITIES   
     if (opts->set_capabilities || opts->lock_securebits) {
         if (!opts->lock_securebits) {
@@ -430,7 +472,10 @@ int serve_client(int fd, struct dived_options *opts) {
         }
     }
     #endif
+    return 0;
+}
 
+int serve_client_rlimit(struct dived_options *opts, struct serve_client_context *ctx) {
     /* Set resource limits, if needed */
     #ifndef NO_RLIMIT
     if(opts->rlimits[0].resource!=-1) {
@@ -446,197 +491,208 @@ int serve_client(int fd, struct dived_options *opts) {
         }
     }
     #endif
+    return 0;
+}
     
-    /* Change into the appropriate user*/
-    if(!opts->noprivs) {
-        struct passwd *pw = NULL;                
-        uid_t targetuid = cred.uid;
-        gid_t targetgid = cred.gid;
+int serve_client_decide_user(struct dived_options *opts, struct serve_client_context *ctx) {
+    /* Decide what user shall we change to */
+    struct passwd *pw = NULL;
+    ctx->targetuid = ctx->cred.uid;
+    ctx->targetgid = ctx->cred.gid;
 
-        
-        if (opts->forceuser) {
-            if (!opts->forcegroups) {
-                pw = getpwnam(opts->forceuser);
-                if (pw) {
-                    targetuid = pw->pw_uid;
-                    targetgid = pw->pw_gid;
-                } else {
-                    targetuid = -1;
-                    fprintf(stderr, "Failed to getpwnam the specified user\n");
-                    fprintf(stderr, "If you want to set uid by number then also specify --groups \n");
-                    return 112;
-                }
+    
+    if (opts->forceuser) {
+        if (!opts->forcegroups) {
+            pw = getpwnam(opts->forceuser);
+            if (pw) {
+                ctx->targetuid = pw->pw_uid;
+                ctx->targetgid = pw->pw_gid;
             } else {
-                targetuid = -1;
-                sscanf(opts->forceuser, "%d", &targetuid);
-                
-                
-                if (targetuid == -1) {
-                    struct passwd *userp = getpwnam(opts->forceuser);
-                    if (!userp) {
-                        fprintf(stderr, "User %s not found (and is not a numeric uid)\n", opts->forceuser);
-                        return 13;
-                    }
-                    targetuid = userp->pw_uid;
-                }
-                
-                targetgid = -1;
-                sscanf(opts->forcegroups, "%u", &targetgid);
-                
-                
-                if (targetgid == -1) {
-                    char first_group_name_without_comma[256];
-                    snprintf(first_group_name_without_comma, sizeof first_group_name_without_comma, "%s", opts->forcegroups);
-                    if (strchr(first_group_name_without_comma, ',')) {
-                        *strchr(first_group_name_without_comma, ',') = 0;
-                    }
-                        
-                    struct group *groupp = getgrnam(first_group_name_without_comma);
-                    if (!groupp) {
-                        fprintf(stderr, "Group %s not found (and is not a numeric gid)\n", first_group_name_without_comma);
-                        return 13;
-                    }
-                    targetgid = groupp->gr_gid;
-                }
+                ctx->targetuid = -1;
+                fprintf(stderr, "Failed to getpwnam the specified user\n");
+                fprintf(stderr, "If you want to set uid by number then also specify --groups \n");
+                return 112;
             }
         } else {
-            /* By default it is user at the other end of the connection */
-            pw = client_cred;
-        }
-        
-        uid_t effective_user = targetuid;
-        gid_t effective_group = targetgid;
-        
-        if (opts->effective_user) {
-            struct passwd *pw_e;
-            pw_e = getpwnam(opts->effective_user);
-            if (pw_e) {
-                effective_user = pw_e->pw_uid;
-                effective_group = pw_e->pw_gid;
-            } else {
-                effective_user=-1;
-                sscanf(opts->effective_user, "%d", &effective_user);
-            }
-        }
-        
-        
-        const char *username = "";
-
-        if(pw) {
-            username = pw->pw_name;
-        }
-        
-        #ifndef NO_CAPABILITIES
-        if (opts->remove_capabilities || opts->retain_capabilities) {      
-            int also_remove_CAP_SETPCAP = 0;      
+            ctx->targetuid = -1;
+            sscanf(opts->forceuser, "%d", &ctx->targetuid);
             
-            if (opts->remove_capabilities ) {
-                
-                char* q = strtok(opts->remove_capabilities, ",");
-                for(; q; q=strtok(NULL, ",")) {                
-                    cap_value_t c=-1;
-                    cap_from_name(q, &c);
-                    if(c==-1) {
-                        perror("cap_from_name");
-                        return -1;
-                    }
-                    if (c == CAP_SETPCAP) {
-                        also_remove_CAP_SETPCAP = 1;
-                        continue;
-                    }
-                    if(prctl(PR_CAPBSET_DROP, c, 0, 0, 0)==-1) {                
-                        perror("prctl(PR_CAPBSET_DROP)");
-                        return -1;
-                    }
+            
+            if (ctx->targetuid == -1) {
+                struct passwd *userp = getpwnam(opts->forceuser);
+                if (!userp) {
+                    fprintf(stderr, "User %s not found (and is not a numeric uid)\n", opts->forceuser);
+                    return 13;
                 }
-            } else {
-                // retain capabilities
-                
-                #define MAXCAPS 256
-                
-                unsigned char retain_set[MAXCAPS] = {0};
-                
-                char* q = strtok(opts->retain_capabilities, ",");
-                for(; q; q=strtok(NULL, ",")) {                
-                    cap_value_t c=-1;
-                    cap_from_name(q, &c);
-                    if(c==-1) {
-                        perror("cap_from_name");
-                        return -1;
-                    }
-                    if (c<MAXCAPS) {
-                        retain_set[c] = 1;
-                    }
-                }
-                
-                cap_value_t i;
-                
-                for(i=0; i<MAXCAPS; ++i) {
-                    if(!retain_set[i]) {
-                        if(i!=CAP_SETPCAP) {
-                            if(prctl(PR_CAPBSET_DROP, i, 0, 0, 0)==-1) {   
-                                if(errno==EINVAL) {
-                                    continue;
-                                }
-                                perror("prctl(PR_CAPBSET_DROP)");
-                                return -1;
-                            }
-                        } else {
-                            also_remove_CAP_SETPCAP = 1;
-                        }
-                    } 
-                }
+                ctx->targetuid = userp->pw_uid;
             }
-            if (also_remove_CAP_SETPCAP) {
-                if(prctl(PR_CAPBSET_DROP, CAP_SETPCAP, 0, 0, 0)==-1) {                
+            
+            ctx->targetgid = -1;
+            sscanf(opts->forcegroups, "%u", &ctx->targetgid);
+            
+            
+            if (ctx->targetgid == -1) {
+                char first_group_name_without_comma[256];
+                snprintf(first_group_name_without_comma, sizeof first_group_name_without_comma, "%s", opts->forcegroups);
+                if (strchr(first_group_name_without_comma, ',')) {
+                    *strchr(first_group_name_without_comma, ',') = 0;
+                }
+                    
+                struct group *groupp = getgrnam(first_group_name_without_comma);
+                if (!groupp) {
+                    fprintf(stderr, "Group %s not found (and is not a numeric gid)\n", first_group_name_without_comma);
+                    return 13;
+                }
+                ctx->targetgid = groupp->gr_gid;
+            }
+        }
+    } else {
+        /* By default it is user at the other end of the connection */
+        pw = ctx->client_cred;
+    }
+    
+    ctx->effective_user = ctx->targetuid;
+    ctx->effective_group = ctx->targetgid;
+    
+    if (opts->effective_user) {
+        struct passwd *pw_e;
+        pw_e = getpwnam(opts->effective_user);
+        if (pw_e) {
+            ctx->effective_user = pw_e->pw_uid;
+            ctx->effective_group = pw_e->pw_gid;
+        } else {
+            ctx->effective_user=-1;
+            sscanf(opts->effective_user, "%d", &ctx->effective_user);
+        }
+    }
+    
+    if(pw) {
+        ctx->username = pw->pw_name;
+    }
+    return 0;
+}
+        
+int serve_client_cap_bset(struct dived_options *opts, struct serve_client_context *ctx) {
+    #ifndef NO_CAPABILITIES
+    if (opts->remove_capabilities || opts->retain_capabilities) {      
+        int also_remove_CAP_SETPCAP = 0;      
+        
+        if (opts->remove_capabilities ) {
+            
+            char* q = strtok(opts->remove_capabilities, ",");
+            for(; q; q=strtok(NULL, ",")) {                
+                cap_value_t c=-1;
+                cap_from_name(q, &c);
+                if(c==-1) {
+                    perror("cap_from_name");
+                    return -1;
+                }
+                if (c == CAP_SETPCAP) {
+                    also_remove_CAP_SETPCAP = 1;
+                    continue;
+                }
+                if(prctl(PR_CAPBSET_DROP, c, 0, 0, 0)==-1) {                
                     perror("prctl(PR_CAPBSET_DROP)");
                     return -1;
                 }
             }
-        }
-        #endif
-        
-        if (!opts->forcegroups) {
-            if (targetuid != getuid() || targetgid != getgid()) {
-                if (initgroups(username, targetgid) == -1) {
-                    perror("initgroups");
+        } else {
+            // retain capabilities
+            
+            #define MAXCAPS 256
+            
+            unsigned char retain_set[MAXCAPS] = {0};
+            
+            char* q = strtok(opts->retain_capabilities, ",");
+            for(; q; q=strtok(NULL, ",")) {                
+                cap_value_t c=-1;
+                cap_from_name(q, &c);
+                if(c==-1) {
+                    perror("cap_from_name");
                     return -1;
                 }
-            }
-        } else {
-            gid_t groups[MAXGROUPS];
-            int group_count = 0;
-            
-            char *saveptr_commas;
-            char* q = strtok_r(opts->forcegroups, ",", &saveptr_commas);
-            for(; q && group_count < MAXGROUPS; q=strtok_r(NULL, ",", &saveptr_commas)) {
-                unsigned int gid = -1;
-                sscanf(q, "%u", &gid);
-                if (gid == -1) {
-                    struct group *groupp = getgrnam(q);
-                    if (!groupp) {
-                        fprintf(stderr, "Group %s not found (and is not a numeric uid)\n", q);
-                        return 13;
-                    }
-                    gid = groupp->gr_gid;
+                if (c<MAXCAPS) {
+                    retain_set[c] = 1;
                 }
-                groups[group_count] = gid;
-                ++group_count;
             }
-            if (setgroups(group_count, groups) == -1) {
-                perror("setgroups");
+            
+            cap_value_t i;
+            
+            for(i=0; i<MAXCAPS; ++i) {
+                if(!retain_set[i]) {
+                    if(i!=CAP_SETPCAP) {
+                        if(prctl(PR_CAPBSET_DROP, i, 0, 0, 0)==-1) {   
+                            if(errno==EINVAL) {
+                                continue;
+                            }
+                            perror("prctl(PR_CAPBSET_DROP)");
+                            return -1;
+                        }
+                    } else {
+                        also_remove_CAP_SETPCAP = 1;
+                    }
+                } 
+            }
+        }
+        if (also_remove_CAP_SETPCAP) {
+            if(prctl(PR_CAPBSET_DROP, CAP_SETPCAP, 0, 0, 0)==-1) {                
+                perror("prctl(PR_CAPBSET_DROP)");
                 return -1;
             }
         }
-        if (!opts->effective_user) {
-            if(setgid(targetgid) == -1) { perror("setgid"); return -1; }
-            if(setuid(targetuid) == -1) { perror("setuid"); return -1; }
-        } else {
-            if(setregid(targetgid, effective_group) == -1) { perror("setregid"); return -1; }
-            if(setreuid(targetuid, effective_user) == -1) { perror("setregid"); return -1; }
+    }
+    #endif
+    return 0;
+}
+        
+int serve_client_groups(struct dived_options *opts, struct serve_client_context *ctx) {
+    if (!opts->forcegroups) {
+        if (ctx->targetuid != getuid() || ctx->targetgid != getgid()) {
+            if (initgroups(ctx->username, ctx->targetgid) == -1) {
+                perror("initgroups");
+                return -1;
+            }
+        }
+    } else {
+        gid_t groups[MAXGROUPS];
+        size_t group_count = 0;
+        
+        char *saveptr_commas;
+        char* q = strtok_r(opts->forcegroups, ",", &saveptr_commas);
+        for(; q && group_count < MAXGROUPS; q=strtok_r(NULL, ",", &saveptr_commas)) {
+            unsigned int gid = -1;
+            sscanf(q, "%u", &gid);
+            if (gid == -1) {
+                struct group *groupp = getgrnam(q);
+                if (!groupp) {
+                    fprintf(stderr, "Group %s not found (and is not a numeric uid)\n", q);
+                    return 13;
+                }
+                gid = groupp->gr_gid;
+            }
+            groups[group_count] = gid;
+            ++group_count;
+        }
+        if (setgroups(group_count, groups) == -1) {
+            perror("setgroups");
+            return -1;
         }
     }
+    return 0;
+}
+
+int serve_client_setuid(struct dived_options *opts, struct serve_client_context *ctx) {
+    if (!opts->effective_user) {
+        if(setgid(ctx->targetgid) == -1) { perror("setgid"); return -1; }
+        if(setuid(ctx->targetuid) == -1) { perror("setuid"); return -1; }
+    } else {
+        if(setregid(ctx->targetgid, ctx->effective_group) == -1) { perror("setregid"); return -1; }
+        if(setreuid(ctx->targetuid, ctx->effective_user) == -1) { perror("setregid"); return -1; }
+    }
+    return 0;
+}
     
+int serve_client_setcap(struct dived_options *opts, struct serve_client_context *ctx) {
     #ifndef NO_CAPABILITIES
     if (opts->set_capabilities) {            
         cap_t c = cap_from_text(opts->set_capabilities);
@@ -650,7 +706,12 @@ int serve_client(int fd, struct dived_options *opts) {
         }
         cap_free(c);
     }
-    
+    #endif
+    return 0;
+}
+
+int serve_client_ambient_caps(struct dived_options *opts, struct serve_client_context *ctx) {
+    #ifndef NO_CAPABILITIES
     if (opts->ambient_capabilities) {
         char* q = strtok(opts->ambient_capabilities, ",");
         for(; q; q=strtok(NULL, ",")) {
@@ -671,7 +732,10 @@ int serve_client(int fd, struct dived_options *opts) {
         }
     }
     #endif
+    return 0;
+}
     
+int serve_client_no_new_privs(struct dived_options *opts, struct serve_client_context *ctx) {
     if (opts->no_new_privs) {
         #ifndef PR_SET_NO_NEW_PRIVS
         #define PR_SET_NO_NEW_PRIVS 38
@@ -682,191 +746,209 @@ int serve_client(int fd, struct dived_options *opts) {
             return -1;
         }
     }
+    return 0;
+}
 
-    /* Not caring much about security since that point */
 
-    int initialisation_finished_event[2];
-    ret = pipe2(initialisation_finished_event, O_CLOEXEC);
+int serve_client_initfinevent(struct dived_options *opts, struct serve_client_context *ctx) {
+    int ret;
+    ret = pipe2(ctx->initialisation_finished_event, O_CLOEXEC);
     if (ret == -1) {
-        initialisation_finished_event[0]=-1;
-        initialisation_finished_event[1]=-1;
+        ctx->initialisation_finished_event[0]=-1;
+        ctx->initialisation_finished_event[1]=-1;
     }
+    return 0;
+}
 
-    int signal_fd = -1;
-    if (!opts->just_execute) {
-        sigset_t mask;
-        sigemptyset(&mask);
-        sigaddset(&mask, SIGCHLD);
-        #ifndef SIGNALFD_WORKAROUND
-        signal_fd = signalfd(-1, &mask, 0/*SFD_NONBLOCK*/);
-        #endif
-        sigprocmask(SIG_BLOCK, &mask, NULL);
-    }
+int serve_client_signalsetup(struct dived_options *opts, struct serve_client_context *ctx) {
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGCHLD);
+    #ifndef SIGNALFD_WORKAROUND
+    ctx->signal_fd = signalfd(-1, &mask, 0/*SFD_NONBLOCK*/);
+    #endif
+    sigprocmask(SIG_BLOCK, &mask, NULL);
+    return 0;
+}
 
-    int pid2 = 0;
-    if (exit_code_or_signal_processing_enabled) {
-        pid2 = fork();
 
-        if (pid2 == -1) {
+int serve_client_maybe_fork(struct dived_options *opts, struct serve_client_context *ctx) {
+    if (ctx->exit_code_or_signal_processing_enabled) {
+        ctx->pid2 = fork();
+
+        if (ctx->pid2 == -1) {
             perror("fork");
             return -1;
         }
     }
     
-    if (!pid2) {
-        if (signal_fd != -1) close(signal_fd);
+    if (!ctx->pid2) {
+        if (ctx->signal_fd != -1) close(ctx->signal_fd);
+    }
+    return 0;
+}
 
-        if (!opts->just_execute) {
-        
-        /* Receive argv */
-        int numargs, totallen;
-        safer_read(fd, (char*)&numargs, sizeof(numargs));
-        safer_read(fd, (char*)&totallen, sizeof(totallen));
-            
-        if (numargs < 0 || numargs > opts->maximum_argv_count ||
-            totallen < 0 || totallen > opts->maximum_argv_size) {
-            fprintf(stderr, "dived: Exceed maximum argv count or size\n");
-            return -1;
-        }
+int serve_client_recv_argv(struct dived_options *opts, struct serve_client_context *ctx) {
+    /* Receive argv */
+    int numargs, totallen;
+    int i, u;
+    int forced_argv_count = opts->forced_argv_count;
 
-        int forced_argv_count = opts->forced_argv_count;
-        char* args=(char*)malloc(totallen);
-        if (!args) {
-            perror("malloc");
-            return -1;
-        }
-        safer_read(fd, args, totallen);
-        if(!opts->client_argv) { numargs=0; totallen=0; }
-        char** argv = (char**) malloc((numargs+forced_argv_count+1)*sizeof(char*));
-        if (!argv) {
-            perror("malloc");
-            return -1;
-        }
-        int i, u;
-        for(u=0; u<forced_argv_count; ++u) {
-            argv[u] = opts->forced_argv[u];
-        }
-        u=forced_argv_count; /* explicit > implicit */
-        argv[u]=args;
-        for(i=0; i<totallen; ++i) {
-            if (!args[i]) {
-                ++u;
-                if ( u-forced_argv_count > numargs) {
-                    fprintf(stderr, "dived: Malformed argv\n");
-                    return -1;
-                }
-                argv[u]=args+i+1;
-            }
-        }
-        argv[forced_argv_count + numargs]=NULL;
-        
-        /* Receive environment */
-        safer_read(fd, (char*)&numargs, sizeof(numargs));
-        safer_read(fd, (char*)&totallen, sizeof(totallen));
-        
-        if (numargs < 0 || numargs > opts->maximum_envp_count ||
-            totallen < 0 || totallen > opts->maximum_envp_size) {
-            fprintf(stderr, "dived: Exceed maximum environment count or size\n");
-            return -1;
-        }
-        
-        char* env=(char*)malloc(totallen);
-        if (!env) {
-            perror("malloc");
-            return -1;
-        }
-        safer_read(fd, env, totallen);
-        char** envp_;
-        if (opts->client_environment) {
-            envp_ = (char**) malloc((numargs+4+1)*sizeof(char*));
-            
-            if (!envp_) {
-                perror("malloc");
-                return -1;
-            }
-            
-            int was_zero = 1;
-            u=0;
-            for(i=0; i<totallen; ++i) {
-                if (was_zero) {
-                    was_zero = 0;
-                    if(!strncmp(env+i, "DIVE_", 5)) continue;
-                    envp_[u]=env+i;
-                    ++u;
-                    if(u>=numargs) break;
-                } 
-                if (!env[i]) {
-                    was_zero = 1;
-                }
-            }
-            char *buffer_uid = (char*)malloc(64);
-            char *buffer_gid = (char*)malloc(64);
-            char *buffer_pid = (char*)malloc(64);
-            char *buffer_user = (char*)malloc(1024);
-            
-            if (!buffer_uid || !buffer_gid || !buffer_pid || !buffer_user) {
-                perror("malloc");
-                // if some buffers are actually allocated, the memory is obviously freed by itself
-                return -1;
-            }
-            
-            snprintf(buffer_uid, 64, "DIVE_UID=%d", cred.uid);
-            snprintf(buffer_gid, 64, "DIVE_GID=%d", cred.gid);
-            snprintf(buffer_pid, 64, "DIVE_PID=%d", cred.pid);
-            if (client_cred) {
-                snprintf(buffer_user, 1024, "DIVE_USER=%s", client_cred->pw_name);
-            } else {
-                snprintf(buffer_user, 1024, "DIVE_USER=");
-            }
-            
-            envp_[u+0]=buffer_uid;
-            envp_[u+1]=buffer_gid;
-            envp_[u+2]=buffer_pid;
-            envp_[u+3]=buffer_user;
-            envp_[u+4]=NULL;
-        } else {
-            envp_ = environ;
-        }
 
-        close(fd);
-        if (debt_instead_of_fd != -1) {
-            dup2(debt_instead_of_fd, fd);
-            close(debt_instead_of_fd);
-        }
+    safer_read(ctx->fd, (char*)&numargs, sizeof(numargs));
+    safer_read(ctx->fd, (char*)&totallen, sizeof(totallen));
         
-        close (initialisation_finished_event[1]);
-        
-        #ifndef NO_EXECVPE
-        execvpe(argv[0], argv, envp_);
-        #else
-        execve(argv[0], argv, envp_);
-        #endif
-        exit(127);
-        
-        } else {
-            // --just-execute
-            
-            close(fd);
-            execvp(opts->forced_argv[0], opts->forced_argv);
-            perror("execvp");
-            exit(127);
-        }
+    if (numargs < 0 || numargs > opts->maximum_argv_count ||
+        totallen < 0 || totallen > opts->maximum_argv_size) {
+        fprintf(stderr, "dived: Exceed maximum argv count or size\n");
+        return -1;
     }
 
+    char* args=(char*)malloc(totallen);
+    if (!args) {
+        perror("malloc");
+        return -1;
+    }
+    safer_read(ctx->fd, args, totallen);
+    if(!opts->client_argv) { numargs=0; totallen=0; }
+    ctx->argv = (char**) malloc((numargs+forced_argv_count+1)*sizeof(char*));
+    if (!ctx->argv) {
+        perror("malloc");
+        return -1;
+    }
+
+    for(u=0; u<forced_argv_count; ++u) {
+        ctx->argv[u] = opts->forced_argv[u];
+    }
+    u=forced_argv_count; /* explicit > implicit */
+    ctx->argv[u]=args;
+    for(i=0; i<totallen; ++i) {
+        if (!args[i]) {
+            ++u;
+            if ( u-forced_argv_count > numargs) {
+                fprintf(stderr, "dived: Malformed argv\n");
+                return -1;
+            }
+            ctx->argv[u]=args+i+1;
+        }
+    }
+    ctx->argv[forced_argv_count + numargs]=NULL;
+    return 0;
+}
+        
+int serve_client_recv_evnvars(struct dived_options *opts, struct serve_client_context *ctx) {
+    /* Receive environment */
+    int numargs, totallen;
+    int i, u;
+
+    safer_read(ctx->fd, (char*)&numargs, sizeof(numargs));
+    safer_read(ctx->fd, (char*)&totallen, sizeof(totallen));
+    
+    if (numargs < 0 || numargs > opts->maximum_envp_count ||
+        totallen < 0 || totallen > opts->maximum_envp_size) {
+        fprintf(stderr, "dived: Exceed maximum environment count or size\n");
+        return -1;
+    }
+    
+    char* env=(char*)malloc(totallen);
+    if (!env) {
+        perror("malloc");
+        return -1;
+    }
+    safer_read(ctx->fd, env, totallen);
+    if (opts->client_environment) {
+        ctx->envp_ = (char**) malloc((numargs+4+1)*sizeof(char*));
+        
+        if (!ctx->envp_) {
+            perror("malloc");
+            return -1;
+        }
+        
+        int was_zero = 1;
+        u=0;
+        for(i=0; i<totallen; ++i) {
+            if (was_zero) {
+                was_zero = 0;
+                if(!strncmp(env+i, "DIVE_", 5)) continue;
+                ctx->envp_[u]=env+i;
+                ++u;
+                if(u>=numargs) break;
+            } 
+            if (!env[i]) {
+                was_zero = 1;
+            }
+        }
+        char *buffer_uid = (char*)malloc(64);
+        char *buffer_gid = (char*)malloc(64);
+        char *buffer_pid = (char*)malloc(64);
+        char *buffer_user = (char*)malloc(1024);
+        
+        if (!buffer_uid || !buffer_gid || !buffer_pid || !buffer_user) {
+            perror("malloc");
+            // if some buffers are actually allocated, the memory is obviously freed by itself
+            return -1;
+        }
+        
+        snprintf(buffer_uid, 64, "DIVE_UID=%d", ctx->cred.uid);
+        snprintf(buffer_gid, 64, "DIVE_GID=%d", ctx->cred.gid);
+        snprintf(buffer_pid, 64, "DIVE_PID=%d", ctx->cred.pid);
+        if (ctx->client_cred) {
+            snprintf(buffer_user, 1024, "DIVE_USER=%s", ctx->client_cred->pw_name);
+        } else {
+            snprintf(buffer_user, 1024, "DIVE_USER=");
+        }
+        
+        ctx->envp_[u+0]=buffer_uid;
+        ctx->envp_[u+1]=buffer_gid;
+        ctx->envp_[u+2]=buffer_pid;
+        ctx->envp_[u+3]=buffer_user;
+        ctx->envp_[u+4]=NULL;
+    } else {
+        ctx->envp_ = environ;
+    }
+    return 0;
+}
+
+int serve_client_exec(struct dived_options *opts, struct serve_client_context *ctx) {
+    close(ctx->fd);
+    if (ctx->debt_instead_of_fd != -1) {
+        dup2(ctx->debt_instead_of_fd, ctx->fd);
+        close(ctx->debt_instead_of_fd);
+    }
+    
+    close (ctx->initialisation_finished_event[1]);
+    
+    #ifndef NO_EXECVPE
+    execvpe(ctx->argv[0], ctx->argv, ctx->envp_);
+    #else
+    execve(ctx->argv[0], ctx->argv, ctx->envp_);
+    #endif
+    exit(127);
+    return 127;
+}
+        
+
+int serve_client_release_fds(struct dived_options *opts, struct serve_client_context *ctx) {
     /* Release client's fds */
     int i;
+
     for(i=0; i<MAXFD; ++i) {
-        if(saved_fdnums[i] && i!=initialisation_finished_event[0]) close(i);
+        if(saved_fdnums[i] && i!=ctx->initialisation_finished_event[0]) close(i);
     }
     
-    if (debt_instead_of_fd != -1) {
-        close(debt_instead_of_fd);
+    if (ctx->debt_instead_of_fd != -1) {
+        close(ctx->debt_instead_of_fd);
     }
     
-    close (initialisation_finished_event[1]);
-    if (initialisation_finished_event[0] != -1) {
+    close (ctx->initialisation_finished_event[1]);
+    return 0;
+}
+
+int serve_client_wait_init_event(struct dived_options *opts, struct serve_client_context *ctx) {
+    int ret;
+    if (ctx->initialisation_finished_event[0] != -1) {
         // will not complete
-        ret = read(initialisation_finished_event[0], &initialisation_finished_event[1], 1); 
+        ret = read(ctx->initialisation_finished_event[0], &ctx->initialisation_finished_event[1], 1); 
         // ret should be 0
         (void)ret;
     } else {
@@ -875,32 +957,39 @@ int serve_client(int fd, struct dived_options *opts) {
         ret = select(0,NULL,NULL,NULL, &to);
         (void)ret;
     }
-    close(initialisation_finished_event[0]);
-        
+    close(ctx->initialisation_finished_event[0]);
+    return 0;
+}
+
+int serve_client_send_pid(struct dived_options *opts, struct serve_client_context *ctx) {
     /* Send executed pid */
-    safer_write(fd, (char*)&pid2, sizeof(pid2));
+    safer_write(ctx->fd, (char*)&ctx->pid2, sizeof(ctx->pid2));
+    return 0;
+}
     
+int serve_client_process_signals(struct dived_options *opts, struct serve_client_context *ctx) {
+    int ret;
     {
         int signal_processing_actual = opts->signal_processing;
-        if (signal_fd == -1) signal_processing_actual=0;
-        safer_write(fd, (char*)&signal_processing_actual, sizeof(signal_processing_actual));
+        if (ctx->signal_fd == -1) signal_processing_actual=0;
+        safer_write(ctx->fd, (char*)&signal_processing_actual, sizeof(signal_processing_actual));
     }
     
-    int dive_signal_fd = recv_fd(fd);
+    int dive_signal_fd = recv_fd(ctx->fd);
     
     int status;
-    if (opts->signal_processing && dive_signal_fd != -1 && signal_fd != -1) {
+    if (opts->signal_processing && dive_signal_fd != -1 && ctx->signal_fd != -1) {
         #ifndef SIGNALFD_WORKAROUND
         fcntl(dive_signal_fd, F_SETFL, O_NONBLOCK);
         
-        int maxfd = (signal_fd > dive_signal_fd) ? signal_fd  : dive_signal_fd;
+        int maxfd = (ctx->signal_fd > dive_signal_fd) ? ctx->signal_fd  : dive_signal_fd;
         
         int ret;
         for(;;) {
             fd_set rfds;
             
             FD_ZERO(&rfds);
-            FD_SET(signal_fd, &rfds);
+            FD_SET(ctx->signal_fd, &rfds);
             FD_SET(dive_signal_fd, &rfds);
                
 
@@ -914,17 +1003,17 @@ int serve_client(int fd, struct dived_options *opts) {
             if (FD_ISSET(dive_signal_fd, &rfds)) {
                 struct signalfd_siginfo si;
                 if (read(dive_signal_fd, &si, sizeof si)>0) {
-                    kill(pid2, si.ssi_signo);
+                    kill(ctx->pid2, si.ssi_signo);
                 }                
             }
             
             
-            if (FD_ISSET(signal_fd, &rfds)) {
+            if (FD_ISSET(ctx->signal_fd, &rfds)) {
                 struct signalfd_siginfo si;
-                if (read(signal_fd, &si, sizeof si)>0) {
-                    if (si.ssi_pid == pid2 && si.ssi_signo == SIGCHLD) {
+                if (read(ctx->signal_fd, &si, sizeof si)>0) {
+                    if (si.ssi_pid == ctx->pid2 && si.ssi_signo == SIGCHLD) {
                         status = si.ssi_status;
-                        safer_write(fd, (char*)&si.ssi_status, 4);
+                        safer_write(ctx->fd, (char*)&si.ssi_status, 4);
                         return 0;
                     }
                 }
@@ -938,22 +1027,103 @@ int serve_client(int fd, struct dived_options *opts) {
         
         #ifndef SIGNALFD_WORKAROUND
         struct signalfd_siginfo si;
-        ret = read(signal_fd, &si, sizeof si);
-        if (ret != -1 && si.ssi_pid == pid2 && si.ssi_signo == SIGCHLD) {
+        ret = read(ctx->signal_fd, &si, sizeof si);
+        if (ret != -1 && si.ssi_pid == ctx->pid2 && si.ssi_signo == SIGCHLD) {
             status = si.ssi_status;
-            safer_write(fd, (char*)&si.ssi_status, 4);
+            safer_write(ctx->fd, (char*)&si.ssi_status, 4);
             return 0;
         }
         /* fallback */
-        close(signal_fd);
+        close(ctx->signal_fd);
         #endif // SIGNALFD_WORKAROUND
         
-        waitpid(pid2, &status, 0);
+        waitpid(ctx->pid2, &status, 0);
         int exitcode = WEXITSTATUS(status);
-        safer_write(fd, (char*)&exitcode, sizeof(exitcode));
+        safer_write(ctx->fd, (char*)&exitcode, sizeof(exitcode));
         return 0;
     }
     return 1;
+}
+
+int serve_client(int fd, struct dived_options *opts) {
+    int ret;
+    struct serve_client_context ctx;
+
+    ctx.fd = fd;
+    ctx.client_cred = NULL;
+    ctx.terminal_fd = -1;
+    ctx.debt_instead_of_fd = -1;
+    ctx.exit_code_or_signal_processing_enabled = opts->fork_and_wait_for_exit_code && !opts->just_execute;
+    ctx.signal_fd = -1;
+    ctx.pid2 = 0;
+    ctx.username = "";
+
+    ret=serve_client_setns            (opts, &ctx);  if (ret!=0) return ret;
+    ret=serve_client_opt_chdir_chroot (opts, &ctx);  if (ret!=0) return ret;
+
+    ret=serve_client_getcred          (opts, &ctx);  if (ret!=0) return ret;
+    ret=serve_client_set_dive_envvars (opts, &ctx);  if (ret!=0) return ret;
+
+    ret=serve_client_daemon           (opts, &ctx);  if (ret!=0) return ret;
+    
+    if (!opts->just_execute) {
+        ret=serve_client_recv_fds_flags   (opts, &ctx);  if (ret!=0) return ret;
+    }
+
+    ret=serve_client_auth_prog        (opts, &ctx);  if (ret!=0) return ret;
+
+    if (!opts->just_execute) {
+        ret=serve_client_umask            (opts, &ctx);  if (ret!=0) return ret;
+        ret=serve_client_rootdir          (opts, &ctx);  if (ret!=0) return ret;
+        ret=serve_client_curdir           (opts, &ctx);  if (ret!=0) return ret;
+    }
+
+    ret=serve_client_setsid           (opts, &ctx);  if (ret!=0) return ret;
+    ret=serve_client_csctty           (opts, &ctx);  if (ret!=0) return ret;
+
+    ret=serve_client_securebits       (opts, &ctx);  if (ret!=0) return ret;
+    ret=serve_client_rlimit           (opts, &ctx);  if (ret!=0) return ret;
+
+    if(!opts->noprivs) {
+        ret=serve_client_decide_user      (opts, &ctx);  if (ret!=0) return ret;
+        ret=serve_client_cap_bset         (opts, &ctx);  if (ret!=0) return ret;
+        ret=serve_client_groups           (opts, &ctx);  if (ret!=0) return ret;
+        ret=serve_client_setuid           (opts, &ctx);  if (ret!=0) return ret;
+    }
+
+
+    ret=serve_client_setcap           (opts, &ctx);  if (ret!=0) return ret;
+    ret=serve_client_ambient_caps     (opts, &ctx);  if (ret!=0) return ret;
+    ret=serve_client_no_new_privs     (opts, &ctx);  if (ret!=0) return ret;
+    
+    /* Not caring much about security since that point */
+    
+    ret=serve_client_initfinevent     (opts, &ctx);  if (ret!=0) return ret;
+    if (!opts->just_execute) {
+        ret=serve_client_signalsetup      (opts, &ctx);  if (ret!=0) return ret;
+        ret=serve_client_maybe_fork       (opts, &ctx);  if (ret!=0) return ret;
+    }
+    if (!ctx.pid2) {
+        if (! opts->just_execute) {
+            ret=serve_client_recv_argv    (opts, &ctx);  if (ret!=0) return ret;
+            ret=serve_client_recv_evnvars (opts, &ctx);  if (ret!=0) return ret;
+            ret=serve_client_exec         (opts, &ctx);  if (ret!=0) return ret;
+            exit(127);
+        } else {
+            close(fd);
+            execvp(opts->forced_argv[0], opts->forced_argv);
+            perror("execvp");
+            exit(127);
+        }
+    }
+
+    // if forked, parent process is a signal and exit code processor:
+    
+    ret=serve_client_release_fds      (opts, &ctx);  if (ret!=0) return ret;
+    ret=serve_client_wait_init_event  (opts, &ctx);  if (ret!=0) return ret;
+    ret=serve_client_send_pid         (opts, &ctx);  if (ret!=0) return ret;
+    ret=serve_client_process_signals  (opts, &ctx);  if (ret!=0) return ret;
+    return 0;
 }
 
 
@@ -1265,7 +1435,7 @@ int main(int argc, char* argv[], char* envp[]) {
                     return 4;
                 #endif
                 j=0;
-                char *saveptr_commas;
+                char *saveptr_commas="";
                 char* q = strtok_r(argv[i+1], ",", &saveptr_commas);
                 for(; q; q=strtok_r(NULL, ",", &saveptr_commas)) {
                     if (j==MAX_RLIMIT_SETS) {
