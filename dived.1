@@ -115,6 +115,9 @@ dived /var/run/givemeroot.dive -C 777 -P -a 'user=root /root/askpassword'
 
 gives the connected user root access if it enters the correct password
 
+The program can also be used to do some setup as root before dropping privileges:
+
+dived /var/run/emptynetwithlo -C 777 -P -s net -a 'ifconfig lo up'
 
     
 .TP
