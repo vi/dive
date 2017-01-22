@@ -1,3 +1,11 @@
+dive (1.8.0-1) unstable; urgency=low
+
+  * Add ability to write simple files
+  * Multiple pidfiles
+  * Refactor
+
+ -- Vitaly Shukela <vi0oss@gmail.com>  Mon, 23 Jan 2017 03:00:00 +0300
+
 dive (1.7.1-1) unstable; urgency=low
 
   * Fix manpage
