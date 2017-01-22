@@ -1,7 +1,7 @@
 #include <unistd.h>
 #include <errno.h>
 
-int safer_write(int f, char* b, int n) {
+int safer_write(int f, const char* b, int n) {
     int acc = 0;
     while(n) {
         int r = write(f, b, n);        

@@ -362,6 +362,15 @@ setpgid(0, getppid());
 setsid();
 
 .TP
+.B -t, --write-content
+After setting up namespaces, but before dropping privileges, write specified content to file
+May be supplied more than one time
+
+Example:
+
+dived -J -S -T -P -s user -t /proc/self/uid_map "0 1000 1" -t /proc/self/setgroups deny -t /proc/self/gid_map '0 1000 1' -- /bin/bash
+
+.TP
 .B -T, --no-csctty        
 Don't do: 
 

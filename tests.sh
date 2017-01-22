@@ -285,6 +285,11 @@ announce    dived --rlimit nofile=10 enforcement '9>'
 E=0 MF= V='' t ./$DIVED_NAME --just-execute --rlimit nofile=10 -- /bin/sh -c '/bin/true 9> /dev/null'
 announce    dived --rlimit nofile=10 enforcement '10>'
 E=fail MF= V='' t ./$DIVED_NAME --just-execute --rlimit nofile=10 -- /bin/sh -c '/bin/true 10> /dev/null'
+announce dived --write-content file \"1 2 3\"
+E=0 MF= V='' t ./$DIVED_NAME --just-execute --write-content tmpfile.txt  "1 2 3" -- /bin/true
+DATA=$(<tmpfile.txt)
+[[ $DATA == "1 2 3" ]] || { echo "File content verification failed"; STATUS=1; }
+rm tmpfile.txt
 
 fi # TESTS_NO_USER
 

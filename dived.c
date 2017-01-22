@@ -77,6 +77,7 @@ void sigchild(int arg) {
 }
 
 #define MAX_SETNS_FILES 8
+#define MAX_WRITECONTENT_FILES 8
 #define MAX_RLIMIT_SETS 30
 
 struct rlimit_setter {
@@ -127,6 +128,8 @@ struct dived_options {
     struct rlimit_setter rlimits[MAX_RLIMIT_SETS];
     char* pivotroot_newroot;
     char* pivotroot_putold;
+    char* writecontent_files[MAX_WRITECONTENT_FILES];
+    char* writecontent_data[MAX_WRITECONTENT_FILES];
     
     int maximum_fd_count;
     int maximum_argv_count;
@@ -190,6 +193,35 @@ int serve_client_setns(struct dived_options *opts, struct serve_client_context *
         }
     }
     #endif
+    return 0;
+}
+
+int serve_client_write_content(struct dived_options *opts, struct serve_client_context *ctx) {
+    int i;
+    for (i=0; i<MAX_WRITECONTENT_FILES; ++i) {
+        if (opts->writecontent_files[i]) {
+            const char* n = opts->writecontent_files[i];
+            const char* c = opts->writecontent_data[i];
+            size_t cl = strlen(c);
+
+            int fd = open(n, O_WRONLY|O_TRUNC|O_CREAT, 0777);
+            if (fd == -1) {
+                perror("open");
+                return 23;
+            }
+            int ret = safer_write(fd, c, cl);
+            if (ret == -1) {
+                close(fd);
+                perror("write");
+                return 23;
+            }
+            close(fd);
+            if (ret < cl) {
+                fprintf(stderr, "Can't write content file in full. Aborting.\n");
+                return 23;
+            }
+        }
+    }
     return 0;
 }
 
@@ -1059,6 +1091,7 @@ int serve_client(int fd, struct dived_options *opts) {
     ctx.username = "";
 
     ret=serve_client_setns            (opts, &ctx);  if (ret!=0) return ret;
+    ret=serve_client_write_content    (opts, &ctx);  if (ret!=0) return ret;
     ret=serve_client_opt_chdir_chroot (opts, &ctx);  if (ret!=0) return ret;
 
     ret=serve_client_getcred          (opts, &ctx);  if (ret!=0) return ret;
@@ -1207,7 +1240,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("Usage: dived {socket_path|@abstract_address|-i|-J} [-p pidfile] [-u user] [-e effective_user] "
                "[-C mode] [-U user:group] [{-R directory | -V newroot putold}] [-r [-W]] [-s smth1,smth2,...] [-a \"program\"] "
                "[{-B cap_smth1,cap_smth2|-b cap_smth1,cap_smth2}] [-m cap_smth1,...] [-X] [-c 'cap_smth+eip cap_smth2+i'] "
-               "[-N /proc/.../ns/net [-N ...]] [-l res_name1=hard1,4=0,res_name2=hard2:soft2,...] "
+               "[-N /proc/.../ns/net [-N ...]] [-l res_name1=hard1,4=0,res_name2=hard2:soft2,...] [-t filename content]"
                "[various other argumentless options] [-- prepended commandline parts]\n");
         printf("          -d --detach           detach\n");
         printf("          -i --inetd            serve once, interpred stdin as client socket\n");
@@ -1245,6 +1278,8 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("                                (implies -H; useful with -r)\n");
         printf("          -s --unshare          Unshare specified namespaces (comma-separated list); also detaches\n");
         printf("                                ipc,net,fs,pid,uts,user\n");
+        printf("          -t  --write-content   write specified string to specified file after namespaces setup, \n");
+        printf("                                (can be specified multiple times)\n");
         printf("          -p --pidfile          save PID to this file\n");
         printf("          -C --chmod            chmod the socket to this mode (like '0777')\n");
         printf("          -U --chown            chown the socket to this user:group\n");
@@ -1372,7 +1407,27 @@ int main(int argc, char* argv[], char* envp[]) {
                     fprintf(stderr, "Exceed maximum number of --setns arguments\n");
                     return 4;
                 }
+                if (argv[i+1] == NULL) {
+                    fprintf(stderr, "--set-ns requires an argument\n");
+                    return 4;
+                }
                 opts->setns_files[j]=argv[i+1];
+                ++i;
+            }else
+            if(!strcmp(argv[i], "-t") || !strcmp(argv[i], "--write-content")) {
+                int j;
+                for (j=0; j<MAX_WRITECONTENT_FILES && opts->writecontent_files[j]!=NULL; ++j);
+                if (j == MAX_WRITECONTENT_FILES) {
+                    fprintf(stderr, "Exceed maximum number of --write-content argument pairs\n");
+                    return 4;
+                }
+                if (argv[i+1] == NULL || argv[i+2] == NULL) {
+                    fprintf(stderr, "--write-content requires two arguments\n");
+                    return 4;
+                }
+                opts->writecontent_files[j]=argv[i+1];
+                opts->writecontent_data[j]=argv[i+2];
+                ++i;
                 ++i;
             }else
             if(!strcmp(argv[i], "-s") || !strcmp(argv[i], "--unshare")) {
