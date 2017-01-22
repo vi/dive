@@ -1267,42 +1267,18 @@ int main(int argc, char* argv[], char* envp[]) {
     }
 
     struct dived_options *opts = &options;
+
+    memset(opts, 0, sizeof(struct dived_options));
     
     opts->socket_path = argv[1];
     opts->nochilddaemon=1;
     opts->nodaemon=1;
-    opts->nofork=0;
-    opts->noprivs=0;
-    opts->nosetsid=0;
-    opts->nocsctty=0;
-    opts->forceuser=NULL;
-    opts->forcegroups=NULL;
-    opts->effective_user=NULL;
-    opts->pidfile=NULL;
-    opts->chmod_=NULL;
-    opts->chown_=NULL;
-    opts->forced_argv = NULL;
-    opts->forced_argv_count = 0;
     opts->client_umask = 1;
     opts->client_chdir = 1;
     opts->client_fds = 1;
     opts->client_argv = 1;
     opts->client_environment = 1;
-    opts->chroot_ = NULL;
-    opts->chdir_ = NULL;
-    {int i; for(i=0; i<MAX_SETNS_FILES; ++i) { opts->setns_files[i] = NULL; } }
     opts->envp = envp;
-    opts->unshare_ = NULL;
-    opts->inetd = 0;
-    opts->client_chroot = 0;
-    opts->root_to_current = 0;
-    opts->authentication_program = NULL;
-    opts->retain_capabilities = NULL;
-    opts->remove_capabilities = NULL;
-    opts->ambient_capabilities = NULL;
-    opts->no_new_privs = 0;
-    opts->just_execute = 0;
-    opts->lock_securebits = 0;
     opts->fork_and_wait_for_exit_code = 1;
     {int i; for(i=0; i<MAX_RLIMIT_SETS; ++i) { opts->rlimits[i].resource = -1; } }
     
