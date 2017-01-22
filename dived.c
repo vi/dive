@@ -78,6 +78,7 @@ void sigchild(int arg) {
 
 #define MAX_SETNS_FILES 8
 #define MAX_WRITECONTENT_FILES 8
+#define MAX_PIDFILES 12
 #define MAX_RLIMIT_SETS 30
 
 struct rlimit_setter {
@@ -97,7 +98,7 @@ struct dived_options {
     char* forceuser;
     char* forcegroups;
     char* effective_user;
-    char* pidfile;
+    char* pidfiles[MAX_PIDFILES];
     char* chmod_;
     char* chown_;
     char** forced_argv;
@@ -1280,7 +1281,8 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("                                ipc,net,fs,pid,uts,user\n");
         printf("          -t  --write-content   write specified string to specified file after namespaces setup, \n");
         printf("                                (can be specified multiple times)\n");
-        printf("          -p --pidfile          save PID to this file\n");
+        printf("          -p --pidfile          save PID to this file; can be specified multiple times\n");
+        printf("                                can also be used to append to cgroup's tasks. Happens early.\n");
         printf("          -C --chmod            chmod the socket to this mode (like '0777')\n");
         printf("          -U --chown            chown the socket to this user:group\n");
         printf("          -E --no-environment   Don't let client set environment variables\n");
@@ -1363,7 +1365,17 @@ int main(int argc, char* argv[], char* envp[]) {
                 ++i;
             }else
             if(!strcmp(argv[i], "-p") || !strcmp(argv[i], "--pidfile")) {
-                opts->pidfile=argv[i+1];
+                int j;
+                for (j=0; j<MAX_PIDFILES && opts->pidfiles[j]!=NULL; ++j);
+                if (j == MAX_PIDFILES) {
+                    fprintf(stderr, "Exceed maximum number of --pidfile arguments\n");
+                    return 4;
+                }
+                if (argv[i+1] == NULL) {
+                    fprintf(stderr, "--pidfile requires an argument\n");
+                    return 4;
+                }
+                opts->pidfiles[j]=argv[i+1];
                 ++i;
             }else
             if(!strcmp(argv[i], "-C") || !strcmp(argv[i], "--chmod")) {
@@ -1757,10 +1769,14 @@ int main(int argc, char* argv[], char* envp[]) {
     }
     
     /* Save pidfile */
-    if (opts->pidfile && !opts->unshare_){
-        FILE* f = fopen(opts->pidfile, "w");
-        fprintf(f, "%d\n", getpid());
-        fclose(f);
+    if (!opts->unshare_){
+        int j;
+        for (j=0; j<MAX_PIDFILES; ++j) {
+            if (opts->pidfiles[j] == NULL) continue;
+            FILE* f = fopen(opts->pidfiles[j], "w");
+            fprintf(f, "%d\n", getpid());
+            fclose(f);
+        }
     }
         
     if (!opts->unshare_) {
@@ -1831,10 +1847,14 @@ int main(int argc, char* argv[], char* envp[]) {
             return 19;
         }
         
-        if (opts->pidfile){
-            FILE* f = fopen(opts->pidfile, "w");
-            fprintf(f, "%d\n", cpid);
-            fclose(f);
+        {
+            int j;
+            for (j=0; j<MAX_PIDFILES; ++j) {
+                if (opts->pidfiles[j] == NULL) continue;
+                FILE* f = fopen(opts->pidfiles[j], "w");
+                fprintf(f, "%d\n", getpid());
+                fclose(f);
+            }
         }
         
         if (opts->nodaemon) {  
