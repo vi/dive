@@ -1329,6 +1329,7 @@ int main(int argc, char* argv[], char* envp[]) {
     opts->maximum_envp_count=1000000;
     opts->maximum_envp_size=10000000;
     
+
     if(!strcmp(argv[1], "-i") || !strcmp(argv[1], "--inetd")) { opts->inetd = 1; }
     if(!strcmp(argv[1], "-J") || !strcmp(argv[1], "--just-execute")) { opts->just_execute = 1; }
     if(!strcmp(argv[1], "-j") || !strcmp(argv[1], "--just-execute2")) {
@@ -1336,6 +1337,13 @@ int main(int argc, char* argv[], char* envp[]) {
         opts->nosetsid = 1;
         opts->nocsctty = 1;
         opts->noprivs = 1;
+    }
+
+    if(argv[1][0] == '-') {
+        if (!opts->inetd  && !opts->just_execute) {
+            fprintf(stderr, "Warning: suspicious socket name '%s'\n", argv[1]);
+            fprintf(stderr, "Only --just-execute, --just-execute2 (-j/-J) or --inetd (-i) may be the first option\n");
+        }
     }
 
     {
@@ -1617,6 +1625,15 @@ int main(int argc, char* argv[], char* envp[]) {
         }
     }
     
+    if (opts->noprivs) {
+        if (opts->forceuser || opts->forcegroups || opts->effective_user) {
+            fprintf(stderr, "--user, --group and --effective_user options are not effective with --no-setuid\n");
+            if (!strcmp(argv[1], "-j") || !strcmp(argv[1], "--just-execute2")) {
+                fprintf(stderr, "Maybe use '-J -S -T' instead of '-j'?\n");
+            }
+            return 4;
+        }
+    }
     if (!getenv("DIVED_NOSANITYCHECK") && !opts->just_execute) { // little check for really insecure setup
         if (opts->forced_argv_count>0 && opts->forced_argv[0][0]!='/' && opts->client_environment) {
             fprintf(stderr, "Please either use absolute program path after -- or use --no-environment option.\n");
