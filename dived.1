@@ -16,6 +16,8 @@ dived - listen AF_UNIX socket for requests to start programs (by
 
 .BI "dived -J " "[options]" " -- " "command line"
 
+.BI "dived -j " "[options]" " -- " "command line"
+
 
 .SH DESCRIPTION
 
@@ -72,7 +74,7 @@ like:
 .SH OPTIONS
 
 The first command line argument must be the socket (filesystem or @abstract) path
-or "-i" (--inetd)  or "-J" (--just-execute).
+or "-i" (--inetd)  or "-J" (--just-execute).or "-j".
 
 All the rest options should each take separate element of argv (no short options 
 combining supported). Option's arguments are the next argv element
@@ -82,6 +84,7 @@ combining supported). Option's arguments are the next argv element
 what can be executed with dived. That way you specify the beginning of command line,
 and the remote user specifies the ending.
 
+In "-j"/"-J" mode the "--" is required.
 
 
 
@@ -234,6 +237,10 @@ Example /etc/inetd.conf configuration line:
 
 This allows anybody who can access /var/run/qqq.dive to run commands as user qqq.
 
+.TP
+.B -j, --just-execute2
+Alias of -J -S -T -P
+
 
 .TP
 .B -J, --just-execute
@@ -350,7 +357,7 @@ Use -X or -B '' options to disable starting any setuid-bit things after such chr
 .TP
 .B -s, --unshare          
 Unshare the specified namespaces.
-Known namespaces: ipc,net,fs,pid,uts
+Known namespaces: ipc,net,fs,pid,uts,user,cgroup
 
 .TP
 .B -S, --no-setsid
@@ -364,12 +371,23 @@ setsid();
 
 .TP
 .B -t, --write-content
-After setting up namespaces, but before dropping privileges, write specified content to file
-May be supplied more than one time
+After setting up namespaces, but before dropping privileges, write specified content to file.
+
+May be supplied more than one time.
 
 Example:
 
 dived -J -S -T -P -s user -t /proc/self/uid_map "0 1000 1" -t /proc/self/setgroups deny -t /proc/self/gid_map '0 1000 1' -- /bin/bash
+
+.TP
+.B -tt, --setup-uidgidmap
+Alias of -t /proc/self/uid_map "0 `id -u` 1" -t /proc/self/setgroups deny -t /proc/self/gid_map "0 `id -g` 1"
+
+Does not require any arguments.
+
+Example:
+
+dived -j -s user -tt -- /bin/bash
 
 .TP
 .B -T, --no-csctty        
