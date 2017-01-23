@@ -1282,6 +1282,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("                                ipc,net,fs,pid,uts,user,cgroup\n");
         printf("          -t  --write-content   write specified string to specified file after namespaces setup, \n");
         printf("                                (can be specified multiple times)\n");
+        printf("          -tt --setup-uidgidmap Automatically write /proc/self/{uidmap,setgroup,gidmap}\n");
         printf("          -p --pidfile          save PID to this file; can be specified multiple times\n");
         printf("                                can also be used to append to cgroup's tasks. Happens early.\n");
         printf("          -C --chmod            chmod the socket to this mode (like '0777')\n");
@@ -1459,6 +1460,29 @@ int main(int argc, char* argv[], char* envp[]) {
                 opts->writecontent_data[j]=argv[i+2];
                 ++i;
                 ++i;
+            }else
+            if(!strcmp(argv[i], "-tt") || !strcmp(argv[i], "--setup-uidgidmap")) {
+                int j;
+                for (j=0; j<MAX_WRITECONTENT_FILES && opts->writecontent_files[j]!=NULL; ++j);
+                if (j >= MAX_WRITECONTENT_FILES-2) {
+                    fprintf(stderr, "Exceed maximum number of --write-content argument pairs\n");
+                    return 4;
+                }
+                opts->writecontent_data[j+0] = malloc(128);
+                opts->writecontent_data[j+2] = malloc(128);
+
+                if (!opts->writecontent_data[j+0] || !opts->writecontent_data[j+2]) {
+                    perror("malloc");
+                    return 4;
+                }
+
+
+                opts->writecontent_files[j+0] = "/proc/self/uid_map";
+                snprintf(opts->writecontent_data[j+0], 128, "0 %lld 1", (long long)getuid());
+                opts->writecontent_files[j+1] = "/proc/self/setgroups";
+                opts->writecontent_data [j+1] = "deny";
+                opts->writecontent_files[j+2] = "/proc/self/gid_map";
+                snprintf(opts->writecontent_data[j+2], 128, "0 %lld 1", (long long)getgid());
             }else
             if(!strcmp(argv[i], "-s") || !strcmp(argv[i], "--unshare")) {
                 opts->unshare_=argv[i+1];
