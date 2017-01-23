@@ -11,13 +11,14 @@ Works by sending file descriptors over UNIX socket.
 
 ```
 $ dived
-Dive server v1.7.1 (proto 1100) https://github.com/vi/dive/
+Dive server v1.8.1 (proto 1100) https://github.com/vi/dive/
 Listen UNIX socket and start programs for each connected client, redirecting fds to client.
-Usage: dived {socket_path|@abstract_address|-i|-J} [-p pidfile] [-u user] [-e effective_user] [-C mode] [-U user:group] [{-R directory | -V newroot putold}] [-r [-W]] [-s smth1,smth2,...] [-a "program"] [{-B cap_smth1,cap_smth2|-b cap_smth1,cap_smth2}] [-m cap_smth1,...] [-X] [-c 'cap_smth+eip cap_smth2+i'] [-N /proc/.../ns/net [-N ...]] [-l res_name1=hard1,4=0,res_name2=hard2:soft2,...] [various other argumentless options] [-- prepended commandline parts]
+Usage: dived {socket_path|@abstract_address|-i|-J} [-p pidfile] [-u user] [-e effective_user] [-C mode] [-U user:group] [{-R directory | -V newroot putold}] [-r [-W]] [-s smth1,smth2,...] [-a "program"] [{-B cap_smth1,cap_smth2|-b cap_smth1,cap_smth2}] [-m cap_smth1,...] [-X] [-c 'cap_smth+eip cap_smth2+i'] [-N /proc/.../ns/net [-N ...]] [-l res_name1=hard1,4=0,res_name2=hard2:soft2,...] [-t filename content][various other argumentless options] [-- prepended commandline parts]
           -d --detach           detach
           -i --inetd            serve once, interpred stdin as client socket
           -J --just-execute     don't mess with sockets at all, just execute the program.
                                 Other options does apply.
+          -j --just-execute2    Alias of -J -S -T -P
           -D --children-daemon  call daemon(0,0) in children
           -F --no-fork          no fork, serve once
                                 this is for debugging or for starting init process in PID unshare
@@ -49,8 +50,12 @@ Usage: dived {socket_path|@abstract_address|-i|-J} [-p pidfile] [-u user] [-e ef
           -W --root-to-current  Set server's root directory as current directory
                                 (implies -H; useful with -r)
           -s --unshare          Unshare specified namespaces (comma-separated list); also detaches
-                                ipc,net,fs,pid,uts,user
-          -p --pidfile          save PID to this file
+                                ipc,net,fs,pid,uts,user,cgroup
+          -t  --write-content   write specified string to specified file after namespaces setup, 
+                                (can be specified multiple times)
+          -tt --setup-uidgidmap Automatically write /proc/self/{uidmap,setgroup,gidmap}
+          -p --pidfile          save PID to this file; can be specified multiple times
+                                can also be used to append to cgroup's tasks. Happens early.
           -C --chmod            chmod the socket to this mode (like '0777')
           -U --chown            chown the socket to this user:group
           -E --no-environment   Don't let client set environment variables
@@ -63,7 +68,6 @@ Usage: dived {socket_path|@abstract_address|-i|-J} [-p pidfile] [-u user] [-e ef
           --                    prepend this to each command line ('--' is mandatory)
               Note that the program being started using "--" with '-e' or '-u' or '-P' options should be
               as secure as suid programs, unless additional options like -E, -M, -O, -H or -A are in use.
-
 
 
 $ dive
