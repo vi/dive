@@ -1278,7 +1278,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -W --root-to-current  Set server's root directory as current directory\n");
         printf("                                (implies -H; useful with -r)\n");
         printf("          -s --unshare          Unshare specified namespaces (comma-separated list); also detaches\n");
-        printf("                                ipc,net,fs,pid,uts,user\n");
+        printf("                                ipc,net,fs,pid,uts,user,cgroup\n");
         printf("          -t  --write-content   write specified string to specified file after namespaces setup, \n");
         printf("                                (can be specified multiple times)\n");
         printf("          -p --pidfile          save PID to this file; can be specified multiple times\n");
@@ -1791,6 +1791,10 @@ int main(int argc, char* argv[], char* envp[]) {
             else if (!strcmp(q,"pid")) flags|=CLONE_NEWPID;
             else if (!strcmp(q,"uts")) flags|=CLONE_NEWUTS;
             else if (!strcmp(q,"user")) flags|=CLONE_NEWUSER;
+#ifndef CLONE_NEWCGROUP
+#define CLONE_NEWCGROUP         0x02000000
+#endif
+            else if (!strcmp(q,"cgroup")) flags|=CLONE_NEWCGROUP;
             else {
                 fprintf(stderr, "Unknown unshare flag '%s'\n", q);
                 return 21;
