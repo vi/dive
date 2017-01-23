@@ -1787,7 +1787,8 @@ int main(int argc, char* argv[], char* envp[]) {
         for(; q; q=strtok(NULL, ",")) {
             if      (!strcmp(q,"ipc")) flags|=CLONE_NEWIPC;
             else if (!strcmp(q,"net")) flags|=CLONE_NEWNET;
-            else if (!strcmp(q,"fs" )) flags|=CLONE_NEWNS;
+            else if (!strcmp(q,"fs" ))  flags|=CLONE_NEWNS;
+            else if (!strcmp(q,"mnt" )) flags|=CLONE_NEWNS;
             else if (!strcmp(q,"pid")) flags|=CLONE_NEWPID;
             else if (!strcmp(q,"uts")) flags|=CLONE_NEWUTS;
             else if (!strcmp(q,"user")) flags|=CLONE_NEWUSER;
