@@ -1247,6 +1247,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -i --inetd            serve once, interpred stdin as client socket\n");
         printf("          -J --just-execute     don't mess with sockets at all, just execute the program.\n");
         printf("                                Other options does apply.\n");
+        printf("          -j --just-execute2    Alias of -J -S -T -P\n");
         printf("          -D --children-daemon  call daemon(0,0) in children\n");
         printf("          -F --no-fork          no fork, serve once\n");
         printf("                                this is for debugging or for starting init process in PID unshare\n");
@@ -1298,6 +1299,9 @@ int main(int argc, char* argv[], char* envp[]) {
         return 4;
     }
 
+// Unused short letters:
+// GIKQYZfkoqvxyz
+
     {
         struct sigaction sa = {{sigchild}};
         sigaction(SIGCHLD, &sa, NULL);
@@ -1327,6 +1331,12 @@ int main(int argc, char* argv[], char* envp[]) {
     
     if(!strcmp(argv[1], "-i") || !strcmp(argv[1], "--inetd")) { opts->inetd = 1; }
     if(!strcmp(argv[1], "-J") || !strcmp(argv[1], "--just-execute")) { opts->just_execute = 1; }
+    if(!strcmp(argv[1], "-j") || !strcmp(argv[1], "--just-execute2")) {
+        opts->just_execute = 1;
+        opts->nosetsid = 1;
+        opts->nocsctty = 1;
+        opts->noprivs = 1;
+    }
 
     {
         int i;
@@ -1587,6 +1597,10 @@ int main(int argc, char* argv[], char* envp[]) {
                 opts->forced_argv = &argv[i+1];
                 opts->forced_argv_count = argc - (i+1);
                 break;
+            }else
+            if(!strcmp(argv[i], "-j") || !strcmp(argv[i], "--just-execute2")) {
+                fprintf(stderr, "Option --just-execute2 must be the first\n");
+                return 4;
             }else
             if(!strcmp(argv[i], "-J") || !strcmp(argv[i], "--just-execute")) {
                 fprintf(stderr, "Option --just-execute must be the first\n");
