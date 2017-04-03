@@ -369,6 +369,24 @@ int serve_client_recv_fds_flags(struct dived_options *opts, struct serve_client_
         ++received_fd_count;
         if(i==ctx->fd) {
             ctx->debt_instead_of_fd=f;
+        } else if (i==ctx->debt_instead_of_fd) {
+            // Now "debt_instead_of_fd wants" to become "fd" and
+            // "i" wants to become "debt_instead_of_fd"
+            
+            // reroute the debt to new FD.
+            // Unfortunately this may be "kicked down the street"
+            // again and again as more FDs are received
+            int newfd = dup(ctx->debt_instead_of_fd);
+            if (newfd == -1) { perror("dup"); return 1; }
+            ctx->debt_instead_of_fd = newfd;
+            
+            // this also closes "i" aka the former debt_instead_of_fd
+            if (dup2(f, i) == i) {
+                saved_fdnums[i]=1;
+            } else {
+                perror("dup2");
+            }
+            close(f);
         } else {
             if(f!=i) {
                 if(dup2(f, i)==i) {
