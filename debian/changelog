@@ -1,3 +1,9 @@
+dive (1.8.2-1) unstable; urgency=low
+
+  * Bug fix in receiving file descriptors
+
+ -- Vitaly Shukela <vi0oss@gmail.com>  Tue, 4 Apr 2017 01:44:00 +0300
+
 dive (1.8.1-1) unstable; urgency=low
 
   * Helpful messages
