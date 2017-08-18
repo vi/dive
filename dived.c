@@ -61,7 +61,7 @@
 #define MAXGROUPS 128
 
 #define VERSION 1100
-#define VERSION2 "v1.8.2"
+#define VERSION2 "v1.9.0"
 
 #define CLONE_STACK_SIZE  (1024*16)
 // For use with "--unshare"
@@ -171,6 +171,7 @@ struct serve_client_context {
     char** argv;
     char** envp_;
     int dive_signal_fd;
+    pid_t pgid;
 };
 
 
@@ -488,6 +489,7 @@ int serve_client_setsid(struct dived_options *opts, struct serve_client_context 
     if (!opts->nosetsid) {
         setpgid(0, getppid());
         setsid();
+        ctx->pgid = getpgid(0);
     }
     return 0;
 }
@@ -1054,7 +1056,14 @@ int serve_client_process_signals(struct dived_options *opts, struct serve_client
             if (FD_ISSET(dive_signal_fd, &rfds)) {
                 struct signalfd_siginfo si;
                 if (read(dive_signal_fd, &si, sizeof si)>0) {
-                    kill(ctx->pid2, si.ssi_signo);
+                    if (opts->signal_processing == 1) {
+                        kill(ctx->pid2, si.ssi_signo);
+                    } else
+                    if (opts->signal_processing == 2) {
+                        if (ctx->pgid != 1) {
+                            kill(-(ctx->pgid), si.ssi_signo);
+                        }
+                    }
                 }                
             }
             
@@ -1108,6 +1117,7 @@ int serve_client(int fd, struct dived_options *opts) {
     ctx.signal_fd = -1;
     ctx.pid2 = 0;
     ctx.username = "";
+    ctx.pgid = getpgid(0);
 
     ret=serve_client_setns            (opts, &ctx);  if (ret!=0) return ret;
     ret=serve_client_write_content    (opts, &ctx);  if (ret!=0) return ret;
@@ -1311,6 +1321,7 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("          -O --no-fds           Don't let client set file descriptors\n");
         printf("          -M --no-umask         Don't let client set umask\n");
         printf("          -n --signals          Transfer all signals from dive\n");
+        printf("             --signals-pgid     Transfer all signals from dive to the process group\n");
         printf("          -w --no-wait          Don't fork and wait for exit code\n");
         printf("          --                    prepend this to each command line ('--' is mandatory)\n");
         printf("              Note that the program being started using \"--\" with '-e' or '-u' or '-P' options should be\n");
@@ -1640,6 +1651,9 @@ int main(int argc, char* argv[], char* envp[]) {
             if(!strcmp(argv[i], "-n") || !strcmp(argv[i], "--signals")) {
                 opts->signal_processing = 1;
             }else
+            if(                          !strcmp(argv[i], "--signals-pgid")) {
+                opts->signal_processing = 2;
+            }else
             if(!strcmp(argv[i], "-w") || !strcmp(argv[i], "--no-wait")) {
                 opts->fork_and_wait_for_exit_code = 0;
             }else
@@ -1717,6 +1731,10 @@ int main(int argc, char* argv[], char* envp[]) {
     if (!opts->fork_and_wait_for_exit_code && opts->signal_processing) {
         fprintf(stderr, "--no-wait and --signals are incompatible\n");
         return 15;
+    }
+    
+    if (opts->signal_processing == 2 && opts->nosetsid) {
+        fprintf(stderr, "--signals-pgid and --no-setsid together are not recommended\n");
     }
     
     #ifdef NO_CAPABILITIES       

@@ -75,6 +75,17 @@ that holds it go away, then exits.
 By default it is 0. If the server refuses to do normal waiting for use, dive automatically
 switches to workaround waiting.
 
+.TP
+.B DIVE_SIGFWMODE
+By default (when dived has no -n/--signals/--signals-pgid option) dive gets the pid of
+executed process and forwards most signals to it.
+When DIVE_SIGFWMODE is set to 0, signal processing on
+dive side is disabled. When set to 2, it negates the pid to before sending the signal
+to make it get to the entire process group. In any case additional information like
+SIGCHLD's pid or SIGIO's fd is not forwarded. When set to 2, but there is 
+--signals or --signals-pgid option on dived side, dive just sends signal number
+to dived, which processes it further.
+
 .SH EXIT STATUS
 By default the exit status should be the same as remote program's exit status.
 

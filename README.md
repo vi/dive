@@ -64,6 +64,7 @@ Usage: dived {socket_path|@abstract_address|-i|-J} [-p pidfile] [-u user] [-e ef
           -O --no-fds           Don't let client set file descriptors
           -M --no-umask         Don't let client set umask
           -n --signals          Transfer all signals from dive
+             --signals-pgid     Transfer all signals from dive to the process group
           -w --no-wait          Don't fork and wait for exit code
           --                    prepend this to each command line ('--' is mandatory)
               Note that the program being started using "--" with '-e' or '-u' or '-P' options should be

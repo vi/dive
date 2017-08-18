@@ -39,7 +39,7 @@ void sigint(int arg) {
 #define MAXFD 1024
 
 #define VERSION 1100
-#define VERSION2 "v1.3"
+#define VERSION2 "v1.9.0"
 
 int main(int argc, char* argv[], char* envp[]) {
     int fd;
@@ -65,6 +65,10 @@ int main(int argc, char* argv[], char* envp[]) {
         printf("                    0(default) - request remote waiting\n");
         printf("                    1 - don't wait, just start the program remotely in background\n");
         printf("                    2 - workaround waiting (using a FD)\n");
+        printf("    DIVE_SIGFWMODE signal forwarding mode\n");
+        printf("                    0 - do not forward signals\n");
+        printf("                    1(default) - forward only to one PID\n");
+        printf("                    2 - forward to a process group (does not affect dived's -n mode)\n");
         printf("    Note that DIVE_* variables are filtered out by dived.\n");
         return 4;
     }
@@ -80,10 +84,12 @@ int main(int argc, char* argv[], char* envp[]) {
     const char* rootdir_path = "/";
     const char* terminal_path = "@0";
     int dive_waiting_mode = 0;
+    int dive_sigfwmode = 1;
     if (getenv("DIVE_CURDIR"))   curdir_path   = getenv("DIVE_CURDIR");
     if (getenv("DIVE_ROOTDIR"))  rootdir_path  = getenv("DIVE_ROOTDIR");
     if (getenv("DIVE_TERMINAL")) terminal_path = getenv("DIVE_TERMINAL");
     if (getenv("DIVE_WAITMODE")) dive_waiting_mode = atoi(getenv("DIVE_WAITMODE"));
+    if (getenv("DIVE_SIGFWMODE"))dive_sigfwmode = atoi(getenv("DIVE_SIGFWMODE"));
         
     if (dive_waiting_mode < 0 || dive_waiting_mode > 2) {
         fprintf(stderr, "Unknown DIVE_WAITMODE value\n");
@@ -114,14 +120,16 @@ int main(int argc, char* argv[], char* envp[]) {
         return 2;
     }
     
+    int signal_fd = -1;
+    if (dive_sigfwmode) {
     /* Open signal FD */
     sigset_t mask;
     sigfillset(&mask);
-    int signal_fd = -1;
     #ifndef SIGNALFD_WORKAROUND
     signal_fd = signalfd(-1, &mask, SFD_NONBLOCK);
     #endif
     sigprocmask(SIG_BLOCK, &mask, NULL);
+    }
     
     
     /* Receive version */
@@ -328,7 +336,14 @@ int main(int argc, char* argv[], char* envp[]) {
                 struct signalfd_siginfo si;
                 if (read(signal_fd, &si, sizeof si)>0) {
                     if (!remote_signal_processing) {
-                        kill(executed_pid, si.ssi_signo);
+                        if (dive_sigfwmode == 1) {
+                            kill(executed_pid, si.ssi_signo);
+                        } else
+                        if (dive_sigfwmode == 2) {
+                            if (executed_pid != 1) {
+                                kill(-executed_pid, si.ssi_signo);
+                            }
+                        }
                     } else {
                         send(sv[1], &si, sizeof si, 0);
                     }

@@ -302,6 +302,12 @@ With -n option dived accepts signals from the client and helps delivering them t
 the started program. This way unprivileged user can be allowed to send signals
 to dived-started programs.
 
+.TP
+.B --signals-pgid
+Transfer all signals from dive to process group
+
+Like -n option, but sends signal to entire process group instead of just one PID.
+Useful for allowing ^C interrupting behaviour to travel though dive/dived.
 
 .TP
 .B -N, --setns           
