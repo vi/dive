@@ -5,7 +5,7 @@ Also allow users execute programs in other user account or in chroot in controll
 
 Works by sending file descriptors over UNIX socket. 
 
-<strong>See various usage examples and pre-built dive[d] versions at the [github page](http://vi.github.com/dive/).</strong>
+<strong>See various usage examples and pre-built dive[d] versions at the [github page](https://vi.github.io/dive/).</strong>
     
 **Usage**
 
